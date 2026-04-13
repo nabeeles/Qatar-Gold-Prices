@@ -7,6 +7,7 @@ import { Calculator as CalcIcon } from 'lucide-react-native';
 const PURITIES = [
   { label: '24K', value: 24 },
   { label: '22K', value: 22 },
+  { label: '21K', value: 21 },
   { label: '18K', value: 18 },
 ];
 
@@ -17,8 +18,24 @@ export default function Calculator() {
 
   const currentRate = useMemo(() => {
     if (!data || !Array.isArray(data)) return 0;
-    const rates = data.filter(i => i.karat === selectedPurity);
-    if (rates.length === 0) return 0;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const rates = data.filter(i => {
+      const itemDate = i.scraped_at.split('T')[0];
+      return i.karat === selectedPurity && itemDate === today;
+    });
+
+    // Fallback: If no data for today, use the latest available records for that karat
+    if (rates.length === 0) {
+      const latestRates = data.filter(i => i.karat === selectedPurity);
+      if (latestRates.length === 0) return 0;
+      
+      // Take only the most recent timestamp available
+      const latestTimestamp = latestRates[0].scraped_at;
+      const recentRates = latestRates.filter(i => i.scraped_at === latestTimestamp);
+      return recentRates.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) / recentRates.length;
+    }
+
     return rates.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0) / rates.length;
   }, [data, selectedPurity]);
 

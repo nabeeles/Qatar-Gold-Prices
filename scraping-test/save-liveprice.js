@@ -19,11 +19,7 @@ async function saveLivePrice() {
     if (prices && Object.keys(prices).length > 0) {
       console.log('✅ Scraped Prices:', prices);
       
-      // Filter out 21k to avoid constraint violation
-      const safePrices = { ...prices };
-      delete safePrices['21k'];
-      
-      await savePrices(target.id, safePrices);
+      await savePrices(target.id, prices);
       console.log('💾 Successfully saved prices to database.');
     } else {
       console.error('❌ Failed to extract prices.');
