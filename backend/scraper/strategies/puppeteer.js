@@ -21,7 +21,7 @@ async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Scraping ${provider.name}...`);
   const browser = await puppeteer.launch({ 
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: []
   });
   
   try {

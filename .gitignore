@@ -6,3 +6,6 @@ dist/
 build/
 .env
 scraping-test/*.png
+*.apk
+nanobanana-output/
+graphify-out/

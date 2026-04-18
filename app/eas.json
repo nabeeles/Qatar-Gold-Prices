@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.6.2"
+    "version": ">= 12.6.2",
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -8,10 +9,16 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
