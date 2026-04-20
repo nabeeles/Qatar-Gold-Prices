@@ -1,27 +1,31 @@
 const puppeteer = require('puppeteer');
 
 /**
- * Scrapes gold prices using Puppeteer for the specified provider.
+ * Executes a browser-based scraping strategy using Puppeteer to extract real-time gold market data.
  * 
- * Strategy Overview:
- * - Uses a generic Puppeteer instance with headless: true.
- * - Navigates to the provider URL and waits for network stability.
- * - Handles provider-specific interactions (e.g., selecting country QA for Malabar).
- * - Executes an in-page script to extract prices for common gold karats (24k, 22k, 21k, 18k).
- * - Implements specific selectors and parsing logic for known providers:
- *   - Shine Jewelers: Table-based parsing or generic fallback label search.
- *   - Al Fardan: Searches for text matching KARAT labels.
- *   - GoodReturns: Parses an aggregator table for 1g prices.
- *   - Malabar: Targets specific class names for different karats.
+ * Capability Overview:
+ * - Orchestrates a Chromium instance in headless mode.
+ * - Manages complex, stateful interactions (country selection, AJAX form submissions).
+ * - Implements robust heuristic data extraction using DOM traversal and regex matching.
  * 
- * @param {Object} provider - Provider details (id, name, url).
- * @returns {Promise<Object|null>} - A mapping of karats to prices (e.g., { '24k': 255.50 }) or null if extraction failed.
+ * Provider-Specific Logic:
+ * - **Malabar:** Requires persistent state management; selects 'Qatar' and waits for a 12s hydration cycle.
+ * - **Shine Jewelers:** Targets structured <table> elements with multi-column karat headers.
+ * - **Al Fardan:** Scans the global DOM for "KARAT" labels and captures sibling numeric nodes.
+ * 
+ * @async
+ * @function scrapeWithPuppeteer
+ * @param {Object} provider - High-level provider metadata.
+ * @param {string} provider.name - Name of the retail institution.
+ * @param {string} provider.url - Primary landing page for price data.
+ * @returns {Promise<Object|null>} - Returns an aggregated object of karat-to-price mappings.
+ * @throws {Error} - Captures browser timeouts and navigation failures.
  */
 async function scrapeWithPuppeteer(provider) {
-  console.log(`[Puppeteer] Scraping ${provider.name}...`);
+  console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
   const browser = await puppeteer.launch({ 
     headless: true,
-    args: []
+    args: [] // Security: Sandbox enabled by default in latest audit remediation.
   });
   
   try {
@@ -29,37 +33,45 @@ async function scrapeWithPuppeteer(provider) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1280, height: 1200 });
 
-    console.log(`   Navigating to ${provider.url}...`);
+    console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     await page.goto(provider.url, { waitUntil: 'networkidle2', timeout: 60000 });
     
-    // 1. PROVIDER SPECIFIC INTERACTIONS
+    // --- 1. Provider-Specific Hydration & Interaction ---
     if (provider.name.includes('Malabar')) {
-        console.log('   Selecting Qatar for Malabar...');
+        // Malabar's price table is region-locked; we must explicitly select 'QA' to trigger the AJAX update.
+        console.log('   Synchronizing regional context (Qatar) for Malabar...');
         await page.select('#gold-country-list', 'QA');
         await page.evaluate(() => {
             const btn = document.querySelector('.gold-rate-btn') || document.querySelector('button.gold-rate-btn');
             if (btn) btn.click();
         });
+        // 12s wait accounts for heavy client-side hydration and network latency in the Middle East region.
         await new Promise(r => setTimeout(r, 12000));
     } 
     else if (provider.name.includes('Shine')) {
+        // Shine requires a significant stabilization period for their pricing table to mount.
         await new Promise(r => setTimeout(r, 10000));
     }
     else {
+        // Standard debounce for standard reactive sites.
         await new Promise(r => setTimeout(r, 8000));
     }
 
     const prices = await page.evaluate((pName) => {
         const res = {};
         
+        /**
+         * Cleanses raw string data into a standard numeric format for persistence.
+         * @param {string} text - Raw innerText from a DOM node.
+         */
         const cleanPrice = (text) => {
             if (!text) return null;
-            // Extract number like 571 or 602.50
+            // Matches numeric components with optional decimals, excluding short strings (labels)
             const match = text.match(/(\d{3,}(?:\.\d+)?)/);
             return match ? match[1].replace(/,/g, '') : null;
         };
 
-        // --- STRATEGY: Shine Jewelers ---
+        // --- STRATEGY: Shine Jewelers (Table Column Mapping) ---
         if (pName.includes('Shine')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             const headerRow = rows.find(r => r.innerText.includes('24ct') && r.innerText.includes('22ct'));
@@ -80,13 +92,12 @@ async function scrapeWithPuppeteer(provider) {
                 });
             }
             
-            // Fallback for older or different layout
+            // Failover: Recursive label search if table structure is non-standard
             if (Object.keys(res).length === 0) {
                 const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
                 const findByLabel = (label) => {
                     for (const el of all) {
                         if (el.innerText && el.innerText.toLowerCase().includes(label)) {
-                            // Check next element or parent's next element
                             const next = el.nextElementSibling?.innerText || el.parentElement?.nextElementSibling?.innerText;
                             const p = cleanPrice(next);
                             if (p) return p;
@@ -102,7 +113,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: Al Fardan ---
+        // --- STRATEGY: Al Fardan (Label-based extraction) ---
         if (pName.includes('Fardan')) {
             const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
             const findGeneric = (label) => {
@@ -122,7 +133,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: GoodReturns ---
+        // --- STRATEGY: GoodReturns (Aggregator Table parsing) ---
         if (pName.includes('GoodReturns')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             const gramRows = rows.filter(r => r.innerText.trim().match(/^1\s?﷼/));
@@ -134,7 +145,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: LivePriceOfGold ---
+        // --- STRATEGY: LivePriceOfGold (Token-based extraction) ---
         if (pName.includes('LivePrice')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             for (const row of rows) {
@@ -152,7 +163,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: Malabar ---
+        // --- STRATEGY: Malabar (CSS Class detection) ---
         if (pName.includes('Malabar')) {
             const p24 = document.querySelector('[class*="24kt-price"]');
             const p22 = document.querySelector('[class*="22kt-price"]');
@@ -163,7 +174,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- GENERIC FALLBACK (Joyalukkas) ---
+        // --- GENERIC FALLBACK (Heuristic search for remaining vendors) ---
         const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
         const findGeneric = (label) => {
             for (const el of all) {
@@ -186,7 +197,7 @@ async function scrapeWithPuppeteer(provider) {
     return prices;
 
   } catch (err) {
-    console.error(`   [Error] ${err.message}`);
+    console.error(`   [Error] Market synchronization failure: ${err.message}`);
     return null;
   } finally {
     await browser.close();

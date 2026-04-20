@@ -23,10 +23,25 @@ A comprehensive security and privacy audit was conducted on the repository codeb
 #### Description
 The Puppeteer browser instance was previously launched with the `--no-sandbox` and `--disable-setuid-sandbox` flags. This has been remediated by removing these flags and configuring the execution environment (GitHub Actions) to support the Chromium sandbox.
 
-#### Remediation Applied
-1.  **Enabled Sandbox:** Removed `--no-sandbox` and `--disable-setuid-sandbox` from `backend/scraper/strategies/puppeteer.js`.
-2.  **Environment Configuration:** Updated `.github/workflows/scrape-prices.yml` to install necessary system libraries (`libgbm-dev`, `libnss3`, etc.) required for the sandbox to function on Linux runners.
-3.  **Security Verification:** The browser now runs within its intended security boundary, mitigating risks of RCE from compromised targets.
+### VULN-002: Insecure Row Level Security (RLS) Policy
+*   **Vulnerability:** Broken Access Control (Anonymous Table Insertion)
+*   **Vulnerability Type:** Security
+*   **Severity:** High (FIXED)
+*   **Location:** `backend/price_alerts_schema.sql` (Lines 25-28)
+*   **Status:** Resolved (Remediated on April 20, 2026)
+
+#### Description
+The RLS policy "Allow anonymous alert insertion" was removed. Anonymous users are now strictly governed by the "Users can manage their own alerts" policy, which utilizes `(select auth.uid())` for secure, performant identity verification.
+
+### VULN-003: PII Leak in Execution Logs
+*   **Vulnerability:** Privacy Violation (Plaintext Push Token Logging)
+*   **Vulnerability Type:** Privacy
+*   **Severity:** Medium (FIXED)
+*   **Location:** `backend/scraper/utils/alerts.js` (Line 52)
+*   **Status:** Resolved (Remediated on April 20, 2026)
+
+#### Description
+Raw Expo Push Tokens were previously logged in plaintext during validation errors. This has been remediated by masking the token in the log output, preserving only the first 10 characters for debugging.
 
 ---
 

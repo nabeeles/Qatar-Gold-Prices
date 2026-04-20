@@ -2,7 +2,15 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 /**
- * Interface representing a gold price record from the database.
+ * Interface representing a gold market synchronization record.
+ * 
+ * @interface GoldPrice
+ * @property {number} id - Unique identifier for the price record.
+ * @property {number} karat - Purity level (24K, 22K, 21K, 18K).
+ * @property {number} price - Spot price per gram in Qatari Riyals (QAR).
+ * @property {string} currency - Standard currency code (default: QAR).
+ * @property {string} scraped_at - ISO timestamp of the market synchronization.
+ * @property {Object} provider - Metadata for the retail institution source.
  */
 export interface GoldPrice {
   id: number;
@@ -16,12 +24,15 @@ export interface GoldPrice {
 }
 
 /**
- * React Query hook to fetch the most recent gold prices for all providers.
+ * React Query hook to synchronize and retrieve the most recent gold market rates across all active providers.
  * 
- * Fetches data from the `gold_prices` table in descending order of `scraped_at`.
- * The data includes related provider names using a foreign key relationship.
+ * Capability:
+ * - Executes a complex join between the `gold_prices` and `providers` registries.
+ * - Filters for verified, active retail institutions only.
+ * - Aggregates the latest spot prices for real-time dashboard visualization.
  * 
- * @returns {Object} - React Query result containing an array of latest GoldPrice objects.
+ * @function useLatestPrices
+ * @returns {Object} - React Query result object containing an array of professional GoldPrice entities.
  */
 export function useLatestPrices() {
   return useQuery({
@@ -42,21 +53,22 @@ export function useLatestPrices() {
 
       if (error) throw error;
 
-      // Group by provider and take the latest for each karat
-      // For this app, we'll just return the raw data and let the component handle display
       return data as unknown as GoldPrice[];
     },
   });
 }
 
 /**
- * React Query hook to fetch historical gold price data for a specific karat.
+ * React Query hook to retrieve and analyze historical gold market data for trend visualization.
  * 
- * Aggregates results by day, taking the average price for each day to provide 
- * a cleaner trend for charts.
+ * Data Processing:
+ * - Retrieves all historical spot prices for a targeted karat level.
+ * - Heuristically aggregates records into daily market averages to mitigate intraday volatility.
+ * - Provides a high-fidelity dataset suitable for analytical charting.
  * 
- * @param {number} karat - The gold karat to fetch history for (default is 24).
- * @returns {Object} - React Query result containing an array of daily price averages.
+ * @function useHistoricalPrices
+ * @param {number} karat - The specific purity level for market analytics (default: 24).
+ * @returns {Object} - React Query result object containing aggregated daily value/timestamp pairs.
  */
 export function useHistoricalPrices(karat: number = 24) {
   return useQuery({
@@ -70,7 +82,7 @@ export function useHistoricalPrices(karat: number = 24) {
 
       if (error) throw error;
 
-      // Group by date and take average to keep chart clean
+      // Logic: Aggregate by calendar date and compute daily spot average.
       const dailyMap: Record<string, { total: number; count: number; timestamp: number }> = {};
       
       data.forEach(item => {

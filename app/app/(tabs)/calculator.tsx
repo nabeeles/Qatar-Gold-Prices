@@ -11,6 +11,20 @@ const PURITIES = [
   { label: '18K', value: 18 },
 ];
 
+/**
+ * Calculator Screen Component.
+ * 
+ * Provides an analytical tool for users to estimate the valuation of gold assets based on live market data.
+ * 
+ * Functional Capabilities:
+ * 1. Real-time Synchronization: Leverages `useLatestPrices` to anchor estimations on current spot rates.
+ * 2. Multi-Karat Support: Facilitates valuation for various purity levels common in the Qatari market (24K, 22K, 21K, 18K).
+ * 3. Heuristic Fallback: Implements a selection strategy to use the most recent available data if today's spot rate is pending synchronization.
+ * 4. Dynamic Computation: Reactively updates total QAR value based on weight input and selected market context.
+ * 
+ * @component Calculator
+ * @returns {JSX.Element} - The rendered gold valuation interface.
+ */
 export default function Calculator() {
   const { data } = useLatestPrices();
   const [weight, setWeight] = useState('10');

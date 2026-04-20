@@ -13,15 +13,27 @@ create table providers (
   created_at timestamptz default now()
 );
 
+comment on table providers is 'Registry of gold price retail institutions and aggregators.';
+comment on column providers.name is 'The professional name of the retail institution.';
+comment on column providers.url is 'The primary landing page or API endpoint used for market synchronization.';
+comment on column providers.scraping_type is 'The architectural strategy used for data extraction (e.g., dynamic Puppeteer vs static Cheerio).';
+comment on column providers.selectors is 'A JSON mapping of karat labels to their respective DOM selectors or regex patterns.';
+comment on column providers.is_active is 'Administrative flag to toggle market data synchronization for this provider.';
+
 -- 3. Create Gold Prices Table
 create table gold_prices (
   id bigint primary key generated always as identity,
   provider_id uuid references providers(id) on delete cascade,
-  karat integer not null check (karat in (24, 22, 18)),
+  karat integer not null check (karat in (24, 22, 21, 18)),
   price decimal(10, 2) not null,
   currency text default 'QAR',
   scraped_at timestamptz default now()
 );
+
+comment on table gold_prices is 'Historical ledger of gold price records aggregated from across the Qatari market.';
+comment on column gold_prices.karat is 'The purity level of the gold record (24, 22, 21, or 18).';
+comment on column gold_prices.price is 'The spot price per gram in Qatari Riyals.';
+comment on column gold_prices.scraped_at is 'The precise timestamp of the market synchronization event.';
 
 -- 4. Enable Row Level Security (RLS)
 alter table providers enable row level security;

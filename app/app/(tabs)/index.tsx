@@ -5,6 +5,20 @@ import { useLatestPrices } from '../../hooks/useGoldPrices';
 import { PriceCard } from '../../components/PriceCard';
 import { TrendingUp } from 'lucide-react-native';
 
+/**
+ * Dashboard Screen Component.
+ * 
+ * Orchestrates the real-time visualization of the Qatari gold market.
+ * 
+ * Functional Capabilities:
+ * 1. Synchronizes with the gold market via the `useLatestPrices` hook.
+ * 2. Aggregation Logic: Groups individual spot price records by retail provider for a consolidated UI.
+ * 3. Market Ranking: Implements a heuristic sort to prioritize primary retail institutions (Malabar, Joyalukkas, etc.).
+ * 4. Analytical Insights: Computes a global market average for 24K gold based on aggregated provider data.
+ * 
+ * @component Dashboard
+ * @returns {JSX.Element} - The rendered market overview dashboard.
+ */
 export default function Dashboard() {
   const { data, isLoading, refetch, isRefetching } = useLatestPrices();
 

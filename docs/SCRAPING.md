@@ -46,18 +46,18 @@ Handles **dynamic elements**. It selects the country (QA) from a dropdown, click
 
 ---
 
-## 🚀 How to Add a New Provider
+### 🚀 How to Add a New Provider
 
 To add a new gold price source:
 
-### 1. Register the Provider in Supabase
+#### 1. Register the Provider in Supabase
 Insert a new record into the `providers` table:
 ```sql
 INSERT INTO providers (name, url, is_active)
 VALUES ('New Provider Name', 'https://www.provider-url.com', true);
 ```
 
-### 2. Update `strategies/puppeteer.js`
+#### 2. Update `strategies/puppeteer.js`
 Add a new block for your provider inside the `page.evaluate()` function:
 ```javascript
 if (pName.includes('New Provider')) {
@@ -67,15 +67,26 @@ if (pName.includes('New Provider')) {
 }
 ```
 
-### 3. Test Locally
-Use the specialized test scripts in `scraping-test/` to verify your new strategy without writing to the production database:
+#### 3. Execution & Testing
+To test the scraper manually after making changes, run the production orchestration script:
 ```bash
-node scraping-test/test-liveprice.js
+cd backend/scraper
+node index.js
 ```
 
 ---
 
-## ℹ️ Supported Karats
+### 📂 Administrative Archive
+
+One-off provisioning and migration tools are maintained in the root `scripts/admin/` directory for reference or environment re-initialization:
+- `migrate_providers.js`: Standardizes provider strategies and karat selectors.
+- `add_shine.js`: Provisions the Shine Jewelers retail institution.
+- `fix_policy.sql`: (Archived) Reference for historical RLS remediations.
+
+---
+
+### ℹ️ Supported Karats
+
 
 The system currently scrapes and supports:
 *   **24K** (999 Gold)

@@ -50,9 +50,10 @@ Detailed instructions can be found in [docs/SETUP.md](docs/SETUP.md).
 
 ```bash
 ├── app/              # React Native Mobile Application (Expo)
-├── backend/          # Node.js Scraper and Supabase utilities
-├── conductor/        # Project planning and design documents
-├── docs/             # Technical Documentation & Guides
+├── backend/          # Node.js Scraper and Supabase configurations
+├── conductor/        # Project planning and feature roadmap
+├── docs/             # Technical Documentation & Security Audits
+├── scripts/          # Administrative and provisioning tools
 └── .github/          # GitHub Actions (Scraper Automation)
 ```
 

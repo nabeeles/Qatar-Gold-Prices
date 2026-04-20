@@ -69,8 +69,16 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 ### 3. Run Scraper Manually
 ```bash
-cd backend/scraper
-node index.js
+# Navigate to backend and run the orchestrator
+cd backend
+node scraper/index.js
+```
+
+### 4. Run Administrative Scripts (Archived)
+To re-initialize providers or migrate policies:
+```bash
+# From project root
+node scripts/admin/migrate_providers.js
 ```
 
 ---

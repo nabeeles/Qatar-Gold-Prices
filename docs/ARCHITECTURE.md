@@ -36,7 +36,10 @@ The **Qatar Gold Prices** project is a full-stack system designed to scrape gold
   - `providers`: Stores provider details (name, URL, active status).
   - `gold_prices`: Stores historical price records linked to providers.
   - `price_alerts`: Stores user push notification tokens and target price conditions.
-- **Security:** Row Level Security (RLS) policies are enabled to allow anonymous users to read data but restrict data writes to the service role (used by the scraper).
+- **Security:** 
+  - Row Level Security (RLS) policies are enabled.
+  - **Identity Verification:** Users can only manage their own alerts using secure `(select auth.uid())` subqueries, which support both anonymous and permanent sessions.
+  - **Access Control:** Restricts data writes to the service role (used by the scraper) while allowing public read access to market rates.
 
 ### 3. The App (Frontend)
 - **Framework:** [Expo](https://expo.dev/) / React Native.

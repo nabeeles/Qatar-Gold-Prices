@@ -5,6 +5,20 @@ import { supabase } from '../../lib/supabase';
 import { registerForPushNotificationsAsync } from '../../lib/notifications';
 import { Bell } from 'lucide-react-native';
 
+/**
+ * Alerts Screen Component.
+ * 
+ * Provides a specialized interface for users to establish price thresholds for automated notifications.
+ * 
+ * Functional Capabilities:
+ * 1. Notification Registration: Synchronizes the device with the Expo Push Notification service.
+ * 2. Persistence Logic: Securely stores price alert configurations (karat, target price, condition) in the remote Supabase database.
+ * 3. Identity Verification: Links alert configurations to the user's secure anonymous session identifier.
+ * 4. Validation: Enforces data integrity checks for price inputs and notification permissions.
+ * 
+ * @component Alerts
+ * @returns {JSX.Element} - The rendered price alert configuration interface.
+ */
 export default function Alerts() {
   const [targetPrice, setTargetPrice] = useState('');
   const [karat, setKarat] = useState(24);
