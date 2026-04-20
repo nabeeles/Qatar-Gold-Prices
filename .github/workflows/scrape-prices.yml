@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Chrome and Dependencies
         run: |
-          npx puppeteer browsers install chrome --install-deps
+          sudo npx --yes puppeteer browsers install chrome --install-deps
 
       - name: Run Scraper
         env:
