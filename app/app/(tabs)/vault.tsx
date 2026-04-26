@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Briefcase, TrendingUp, TrendingDown, Trash2, Calendar, Info } from 'lucide-react-native';
 import { useVault } from '../../hooks/useVault';
@@ -86,7 +86,7 @@ export default function VaultScreen() {
           <View style={styles.emptyState}>
             <Briefcase size={48} color="#222" />
             <Text style={styles.emptyText}>You haven't added any gold yet.</Text>
-            <Text style={styles.emptySubtext}>Add your gold purchases to track their value.</Text>
+            <Text style={styles.emptySubtext}>Add your purchases to track their value.</Text>
           </View>
         ) : (
           entries.map((entry) => (
@@ -115,7 +115,7 @@ export default function VaultScreen() {
 
 function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice: number, onDelete: () => void }) {
   const currentValue = currentPrice * entry.weight;
-  const costBasis = entry.price_per_gram * entry.weight;
+  const costBasis = (entry.price_per_gram || 0) * entry.weight;
   const gainLoss = currentValue - costBasis;
 
   return (
@@ -178,80 +178,89 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Add Gold Asset</Text>
-          
-          <Text style={styles.inputLabel}>Label (Optional)</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="e.g. Wedding Ring" 
-            placeholderTextColor="#444"
-            value={label}
-            onChangeText={setLabel}
-          />
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContent}
+          >
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add Gold Asset</Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeModalButton}>
+                    <Text style={{ color: '#D4AF37', fontWeight: 'bold' }}>Close</Text>
+                </TouchableOpacity>
+            </View>
+            
+            <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
+              <Text style={styles.inputLabel}>Label (Optional)</Text>
+              <TextInput 
+                style={styles.input} 
+                placeholder="e.g. Wedding Ring" 
+                placeholderTextColor="#444"
+                value={label}
+                onChangeText={setLabel}
+              />
 
-          <View style={styles.inputRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.inputLabel}>Karat</Text>
-              <View style={styles.karatPicker}>
-                {[18, 21, 22, 24].map((k) => (
-                  <TouchableOpacity 
-                    key={k} 
-                    style={[styles.karatOption, karat === k && styles.karatSelected]}
-                    onPress={() => setKarat(k)}
-                  >
-                    <Text style={[styles.karatText, karat === k && styles.karatTextSelected]}>{k}K</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.inputRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.inputLabel}>Karat</Text>
+                  <View style={styles.karatPicker}>
+                    {[18, 21, 22, 24].map((k) => (
+                      <TouchableOpacity 
+                        key={k} 
+                        style={[styles.karatOption, karat === k && styles.karatSelected]}
+                        onPress={() => setKarat(k)}
+                      >
+                        <Text style={[styles.karatText, karat === k && styles.karatTextSelected]}>{k}K</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
 
-          <View style={styles.inputRow}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.inputLabel}>Weight (grams)</Text>
+              <View style={styles.inputRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                  <Text style={styles.inputLabel}>Weight (grams)</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric" 
+                    placeholder="0.00" 
+                    placeholderTextColor="#444"
+                    value={weight}
+                    onChangeText={setWeight}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>Price per Gram (QAR)</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric" 
+                    placeholder="0.00" 
+                    placeholderTextColor="#444"
+                    value={price}
+                    onChangeText={setPrice}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Purchase Date</Text>
               <TextInput 
                 style={styles.input} 
-                keyboardType="numeric" 
-                placeholder="0.00" 
+                placeholder="YYYY-MM-DD" 
                 placeholderTextColor="#444"
-                value={weight}
-                onChangeText={setWeight}
+                value={date}
+                onChangeText={setDate}
               />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.inputLabel}>Price per Gram (QAR)</Text>
-              <TextInput 
-                style={styles.input} 
-                keyboardType="numeric" 
-                placeholder="0.00" 
-                placeholderTextColor="#444"
-                value={price}
-                onChangeText={setPrice}
-              />
-            </View>
-          </View>
 
-          <Text style={styles.inputLabel}>Purchase Date</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="YYYY-MM-DD" 
-            placeholderTextColor="#444"
-            value={date}
-            onChangeText={setDate}
-          />
-
-          <View style={styles.modalButtons}>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save to Vault</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                  <Text style={styles.saveButtonText}>Save to My Gold</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
@@ -439,13 +448,22 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 25,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 25,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   modalTitle: {
     color: '#FFF',
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 20,
+  },
+  closeModalButton: {
+    padding: 5,
   },
   inputLabel: {
     color: '#AAA',
@@ -492,18 +510,10 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     marginTop: 30,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#666',
-    fontWeight: 'bold',
+    marginBottom: 20,
   },
   saveButton: {
-    flex: 2,
+    flex: 1,
     backgroundColor: '#D4AF37',
     borderRadius: 12,
     paddingVertical: 15,
