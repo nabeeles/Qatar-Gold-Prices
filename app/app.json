@@ -4,12 +4,12 @@
     "slug": "qatar-gold-price",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/icon.jpg",
     "scheme": "qatar-gold-price",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-icon.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#0A0A0A"
     },
@@ -23,11 +23,11 @@
     "android": {
       "package": "com.nabeeles.qatargold",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.jpg",
         "backgroundColor": "#0A0A0A"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 17
+      "versionCode": 18
     },
     "web": {
       "bundler": "metro",

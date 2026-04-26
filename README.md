@@ -8,7 +8,7 @@ A full-stack mobile application to track real-time gold prices in Qatar from mul
 
 - **📍 Multiple Providers:** Scraping prices directly from Al Fardan Exchange, Malabar Gold, Joyalukkas, and more.
 - **🕒 Real-time Updates:** Stay updated with the latest 24K, 22K, 21K, and 18K gold rates per gram in QAR.
-- **📈 My Gold Portfolio:** Private, local-only tracker to record your gold assets and view real-time valuation and P/L.
+- **📈 My Gold Portfolio:** Private, local-only tracker to record your gold assets with a keyboard-optimized "Safe-Entry" form.
 - **📊 Historical Trends:** Interactive charts showing gold price fluctuations over time for all karats.
 - **🔔 Price Alerts:** Set custom targets for when the gold price drops or rises above your specified value.
 - **📱 Native Mobile Experience:** Built with Expo and React Native for a smooth, high-performance UI.

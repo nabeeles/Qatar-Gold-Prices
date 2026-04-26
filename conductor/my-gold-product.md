@@ -30,8 +30,11 @@ To provide a private, local-only portfolio tracker where users can record their 
     *   **Total Portfolio Value:** Large, bold gold text.
     *   **Total Gain/Loss:** Percentage and absolute QAR, color-coded (Green for profit, Red for loss).
     *   **Note:** "Valuation based on the market average across all providers."
+*   **Safe-Entry Modal:**
+    *   **Keyboard Awareness:** The input form automatically shifts to remain visible when the onscreen keyboard is open.
+    *   **Intuitive Dismissal:** Supports tapping outside the form to hide the keyboard.
+    *   **Scrollable Inputs:** Form content is scrollable to ensure accessibility on all screen sizes.
 *   **Entry List:** Scrollable list of cards showing the label, weight, karat, and current performance of each entry.
-*   **Add Asset Modal:** A clean form to input weight, select karat (18K, 21K, 22K, 24K), price per gram, and optional label/date.
 
 ## 6. Security & Privacy
 *   **Local Storage:** All data is stored locally on the device using SQLite.
