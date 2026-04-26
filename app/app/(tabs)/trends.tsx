@@ -11,36 +11,50 @@ const TIMEFRAMES = [
   { label: '1Y', value: '365d' },
 ];
 
+const PURITIES = [
+  { label: '24K', value: 24 },
+  { label: '22K', value: 22 },
+  { label: '21K', value: 21 },
+  { label: '18K', value: 18 },
+];
+
 /**
  * Trends Screen Component.
  * 
  * Displays historical gold price movements using interactive charts.
  * Features:
  * 1. Timeframe selection (1 Week, 1 Month, 1 Year).
- * 2. Interactive line chart with price and date tooltips on scrub.
- * 3. Dynamic market insights based on current trend data.
+ * 2. Purity selection (18K, 21K, 22K, 24K).
+ * 3. Interactive line chart with price and date tooltips on scrub.
+ * 4. Dynamic market insights based on current trend data.
  */
 export default function Trends() {
-  const { data, isLoading, error } = useHistoricalPrices(24);
+  const [selectedPurity, setSelectedPurity] = useState(24);
   const [selectedTimeframe, setSelectedTimeframe] = useState('30d');
+  const { data, isLoading, error } = useHistoricalPrices(selectedPurity);
 
   // Filter and format data based on selected timeframe for the chart
   const chartData = useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) return [];
     
-    const now = Date.now();
-    let cutoff = 0;
-    
-    if (selectedTimeframe === '7d') cutoff = now - (7 * 24 * 60 * 60 * 1000);
-    else if (selectedTimeframe === '30d') cutoff = now - (30 * 24 * 60 * 60 * 1000);
-    else if (selectedTimeframe === '365d') cutoff = now - (365 * 24 * 60 * 60 * 1000);
-    
-    return data
-      .filter(d => d.timestamp >= cutoff)
-      .map(d => ({
-        timestamp: d.timestamp,
-        value: Number(d.value)
-      }));
+    try {
+      const now = Date.now();
+      let cutoff = 0;
+      
+      if (selectedTimeframe === '7d') cutoff = now - (7 * 24 * 60 * 60 * 1000);
+      else if (selectedTimeframe === '30d') cutoff = now - (30 * 24 * 60 * 60 * 1000);
+      else if (selectedTimeframe === '365d') cutoff = now - (365 * 24 * 60 * 60 * 1000);
+      
+      return data
+        .filter(d => d && d.timestamp >= cutoff)
+        .map(d => ({
+          timestamp: d.timestamp,
+          value: Number(d.value) || 0
+        }));
+    } catch (err) {
+      console.error('Error processing chart data:', err);
+      return [];
+    }
   }, [data, selectedTimeframe]);
 
   if (isLoading) {
@@ -68,16 +82,39 @@ export default function Trends() {
           </Text>
           <Text style={{ color: '#FFFFFF', fontSize: 36, fontWeight: 'bold', marginBottom: 32 }}>Trends</Text>
 
-          {/* Timeframe Selector */}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 }}>
+          {/* Timeframe & Purity Selectors */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', backgroundColor: '#1A1A1A', padding: 4, borderRadius: 12, borderWidth: 1, borderColor: '#333' }}>
+              {PURITIES.map((p) => (
+                <TouchableOpacity
+                  key={p.value}
+                  onPress={() => setSelectedPurity(p.value)}
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                    backgroundColor: selectedPurity === p.value ? '#D4AF37' : 'transparent'
+                  }}
+                >
+                  <Text style={{ 
+                    fontSize: 10, 
+                    fontWeight: 'bold', 
+                    color: selectedPurity === p.value ? '#000000' : '#A0A0A0'
+                  }}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <View style={{ flexDirection: 'row', backgroundColor: '#1A1A1A', padding: 4, borderRadius: 12, borderWidth: 1, borderColor: '#333' }}>
               {TIMEFRAMES.map((tf) => (
                 <TouchableOpacity
                   key={tf.value}
                   onPress={() => setSelectedTimeframe(tf.value)}
                   style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
                     borderRadius: 8,
                     backgroundColor: selectedTimeframe === tf.value ? '#D4AF37' : 'transparent'
                   }}
@@ -136,7 +173,7 @@ export default function Trends() {
           {/* Market Context Info */}
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 32 }}>
             <ChartIcon size={16} color="#D4AF37" />
-            <Text style={{ color: '#F1E5AC', fontSize: 13, fontWeight: '600', marginLeft: 10 }}>24K Gold Price per Gram (QAR)</Text>
+            <Text style={{ color: '#F1E5AC', fontSize: 13, fontWeight: '600', marginLeft: 10 }}>{selectedPurity}K Gold Price per Gram (QAR)</Text>
           </View>
 
           {/* Insight Box */}

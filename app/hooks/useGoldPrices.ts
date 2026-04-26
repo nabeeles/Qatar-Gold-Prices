@@ -3,14 +3,6 @@ import { supabase } from '../lib/supabase';
 
 /**
  * Interface representing a gold market synchronization record.
- * 
- * @interface GoldPrice
- * @property {number} id - Unique identifier for the price record.
- * @property {number} karat - Purity level (24K, 22K, 21K, 18K).
- * @property {number} price - Spot price per gram in Qatari Riyals (QAR).
- * @property {string} currency - Standard currency code (default: QAR).
- * @property {string} scraped_at - ISO timestamp of the market synchronization.
- * @property {Object} provider - Metadata for the retail institution source.
  */
 export interface GoldPrice {
   id: number;
@@ -25,19 +17,15 @@ export interface GoldPrice {
 
 /**
  * React Query hook to synchronize and retrieve the most recent gold market rates across all active providers.
- * 
- * Capability:
- * - Executes a complex join between the `gold_prices` and `providers` registries.
- * - Filters for verified, active retail institutions only.
- * - Aggregates the latest spot prices for real-time dashboard visualization.
- * 
- * @function useLatestPrices
- * @returns {Object} - React Query result object containing an array of professional GoldPrice entities.
  */
 export function useLatestPrices() {
   return useQuery({
     queryKey: ['latest-prices'],
     queryFn: async () => {
+      if (!supabase) {
+        console.warn('Supabase not initialized, returning mock/empty data');
+        return [];
+      }
       const { data, error } = await supabase
         .from('gold_prices')
         .select(`
@@ -60,20 +48,15 @@ export function useLatestPrices() {
 
 /**
  * React Query hook to retrieve and analyze historical gold market data for trend visualization.
- * 
- * Data Processing:
- * - Retrieves all historical spot prices for a targeted karat level.
- * - Heuristically aggregates records into daily market averages to mitigate intraday volatility.
- * - Provides a high-fidelity dataset suitable for analytical charting.
- * 
- * @function useHistoricalPrices
- * @param {number} karat - The specific purity level for market analytics (default: 24).
- * @returns {Object} - React Query result object containing aggregated daily value/timestamp pairs.
  */
 export function useHistoricalPrices(karat: number = 24) {
   return useQuery({
     queryKey: ['historical-prices', karat],
     queryFn: async () => {
+      if (!supabase) {
+        console.warn('Supabase not initialized, returning mock/empty data');
+        return [];
+      }
       const { data, error } = await supabase
         .from('gold_prices')
         .select('price, scraped_at')

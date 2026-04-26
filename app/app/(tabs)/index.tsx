@@ -9,15 +9,6 @@ import { TrendingUp } from 'lucide-react-native';
  * Dashboard Screen Component.
  * 
  * Orchestrates the real-time visualization of the Qatari gold market.
- * 
- * Functional Capabilities:
- * 1. Synchronizes with the gold market via the `useLatestPrices` hook.
- * 2. Aggregation Logic: Groups individual spot price records by retail provider for a consolidated UI.
- * 3. Market Ranking: Implements a heuristic sort to prioritize primary retail institutions (Malabar, Joyalukkas, etc.).
- * 4. Analytical Insights: Computes a global market average for 24K gold based on aggregated provider data.
- * 
- * @component Dashboard
- * @returns {JSX.Element} - The rendered market overview dashboard.
  */
 export default function Dashboard() {
   const { data, isLoading, refetch, isRefetching } = useLatestPrices();
@@ -26,63 +17,63 @@ export default function Dashboard() {
   const groupedData = React.useMemo(() => {
     if (!data || !Array.isArray(data)) return [];
     
-    const providerMap = new Map<string, {
-      id: string;
-      name: string;
-      scraped_at: string;
-      prices: { karat: number; price: number }[]
-    }>();
-    
-    data.forEach(item => {
-      if (!item.provider || !item.provider.name) return;
-      const providerName = item.provider.name;
+    try {
+      const providerMap = new Map<string, {
+        id: string;
+        name: string;
+        scraped_at: string;
+        prices: { karat: number; price: number }[]
+      }>();
       
-      if (!providerMap.has(providerName)) {
-        providerMap.set(providerName, {
-          id: providerName,
-          name: providerName,
-          scraped_at: item.scraped_at,
-          prices: []
-        });
-      }
-      
-      const providerData = providerMap.get(providerName)!;
-      // Only keep the latest for each karat
-      if (!providerData.prices.some(p => p.karat === item.karat)) {
-        providerData.prices.push({ karat: item.karat, price: item.price });
-      }
-    });
+      data.forEach(item => {
+        if (!item || !item.provider || !item.provider.name) return;
+        const providerName = item.provider.name;
+        
+        if (!providerMap.has(providerName)) {
+          providerMap.set(providerName, {
+            id: providerName,
+            name: providerName,
+            scraped_at: item.scraped_at || new Date().toISOString(),
+            prices: []
+          });
+        }
+        
+        const providerData = providerMap.get(providerName)!;
+        // Only keep the latest for each karat
+        if (!providerData.prices.some(p => p.karat === item.karat)) {
+          providerData.prices.push({ karat: item.karat, price: Number(item.price) || 0 });
+        }
+      });
 
-    const sortedData = Array.from(providerMap.values()).sort((a, b) => {
-      const order = [
-        'Malabar',
-        'Joyalukkas',
-        'LivePriceOfGold',
-        'GoodReturns',
-        'Fardan'
-      ];
-      
-      const indexA = order.findIndex(name => a.name.includes(name));
-      const indexB = order.findIndex(name => b.name.includes(name));
-      
-      // If not in our list, put at the end
-      const posA = indexA === -1 ? 999 : indexA;
-      const posB = indexB === -1 ? 999 : indexB;
-      
-      return posA - posB;
-    });
+      const sortedData = Array.from(providerMap.values()).sort((a, b) => {
+        const order = ['Malabar', 'Joyalukkas', 'LivePriceOfGold', 'GoodReturns', 'Fardan'];
+        const indexA = order.findIndex(name => a.name.includes(name));
+        const indexB = order.findIndex(name => b.name.includes(name));
+        const posA = indexA === -1 ? 999 : indexA;
+        const posB = indexB === -1 ? 999 : indexB;
+        return posA - posB;
+      });
 
-    return sortedData;
+      return sortedData;
+    } catch (err) {
+      console.error('Error grouping dashboard data:', err);
+      return [];
+    }
   }, [data]);
 
   const average24k = React.useMemo(() => {
-    const prices24k = groupedData
-      .flatMap(p => p.prices)
-      .filter(p => p.karat === 24);
-      
-    if (prices24k.length === 0) return "0.00";
-    const sum = prices24k.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
-    return (sum / prices24k.length).toFixed(2);
+    try {
+      const prices24k = groupedData
+        .flatMap(p => p.prices)
+        .filter(p => p.karat === 24);
+        
+      if (prices24k.length === 0) return "0.00";
+      const sum = prices24k.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
+      return (sum / prices24k.length).toFixed(2);
+    } catch (err) {
+      console.error('Error calculating 24k average:', err);
+      return "0.00";
+    }
   }, [groupedData]);
 
   if (isLoading) {

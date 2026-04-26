@@ -7,17 +7,6 @@ import { Bell } from 'lucide-react-native';
 
 /**
  * Alerts Screen Component.
- * 
- * Provides a specialized interface for users to establish price thresholds for automated notifications.
- * 
- * Functional Capabilities:
- * 1. Notification Registration: Synchronizes the device with the Expo Push Notification service.
- * 2. Persistence Logic: Securely stores price alert configurations (karat, target price, condition) in the remote Supabase database.
- * 3. Identity Verification: Links alert configurations to the user's secure anonymous session identifier.
- * 4. Validation: Enforces data integrity checks for price inputs and notification permissions.
- * 
- * @component Alerts
- * @returns {JSX.Element} - The rendered price alert configuration interface.
  */
 export default function Alerts() {
   const [targetPrice, setTargetPrice] = useState('');
@@ -26,6 +15,11 @@ export default function Alerts() {
   const [isSettingUp, setIsSettingUp] = useState(false);
 
   const handleSaveAlert = async () => {
+    if (!supabase) {
+      Alert.alert('Configuration Missing', 'Supabase URL/Key not found. Cloud features are disabled.');
+      return;
+    }
+
     if (!targetPrice) {
       Alert.alert('Error', 'Please enter a target price.');
       return;
@@ -77,6 +71,12 @@ export default function Alerts() {
             <Text style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 18 }}>Create New Alert</Text>
           </View>
 
+          {!supabase && (
+            <View style={{ padding: 12, backgroundColor: 'rgba(248,113,113,0.1)', borderRadius: 8, marginBottom: 20 }}>
+              <Text style={{ color: '#F87171', fontSize: 12, fontWeight: 'bold' }}>Offline Mode: Cloud alerts are disabled due to missing configuration.</Text>
+            </View>
+          )}
+
           <View style={{ marginBottom: 24 }}>
             <Text style={{ color: '#A0A0A0', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12 }}>Notify me when price is</Text>
             <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', padding: 4, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
@@ -124,8 +124,8 @@ export default function Alerts() {
 
           <TouchableOpacity 
             onPress={handleSaveAlert}
-            disabled={isSettingUp}
-            style={{ backgroundColor: '#D4AF37', paddingVertical: 20, borderRadius: 16, alignItems: 'center' }}
+            disabled={isSettingUp || !supabase}
+            style={{ backgroundColor: !supabase ? '#444' : '#D4AF37', paddingVertical: 20, borderRadius: 16, alignItems: 'center' }}
           >
             <Text style={{ color: '#000000', fontWeight: '900', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
               {isSettingUp ? 'SETTING UP...' : 'ACTIVATE ALERT'}

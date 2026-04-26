@@ -5,63 +5,83 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View, Text } from 'react-native';
 import 'react-native-reanimated';
 import "../global.css";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { signInAnonymously } from '../lib/supabase';
+import { SQLiteProvider } from 'expo-sqlite';
+import { DATABASE_NAME, onDatabaseInit } from '../lib/db';
 
 import { useColorScheme } from '@/components/useColorScheme';
 
 const queryClient = new QueryClient();
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 export {
   // Catch any errors thrown by the Layout component.
   ErrorBoundary,
 } from 'expo-router';
 
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
 /**
  * Root Layout of the Expo application.
- * 
- * Responsibilities:
- * 1. Initializes the React Query client (`QueryClientProvider`).
- * 2. Loads custom fonts and icon sets (SpaceMono, FontAwesome).
- * 3. Handles anonymous authentication with Supabase on startup.
- * 4. Manages the Splash Screen state (hides it after data is ready).
- * 5. Provides global providers for Theming and Gesture Handling.
+ * Includes a global error catcher to prevent silent startup crashes.
  */
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
+  const [loaded, fontError] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  const [isReady, setIsReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (loaded) {
-      signInAnonymously().then(() => {
-        SplashScreen.hideAsync();
-      });
+    async function prepare() {
+      try {
+        if (loaded) {
+          // Attempt anonymous sign-in but don't let it crash the app if offline
+          try {
+            await signInAnonymously();
+          } catch (e) {
+            console.warn('Supabase init failed, continuing in offline mode');
+          }
+          setIsReady(true);
+        }
+      } catch (e) {
+        setInitError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (loaded || fontError) {
+          SplashScreen.hideAsync().catch(() => {});
+        }
+      }
     }
-  }, [loaded]);
+    prepare();
+  }, [loaded, fontError]);
 
-  if (!loaded) {
+  // If there's a critical initialization error, show it on screen instead of crashing
+  if (initError || fontError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: 'bold', marginBottom: 10 }}>Startup Error</Text>
+        <Text style={{ color: '#FFF', textAlign: 'center' }}>{initError || fontError?.message}</Text>
+      </View>
+    );
+  }
+
+  if (!loaded && !fontError) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
-        <RootLayoutNav />
+        <SQLiteProvider databaseName={DATABASE_NAME} onInit={onDatabaseInit}>
+          <RootLayoutNav />
+        </SQLiteProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

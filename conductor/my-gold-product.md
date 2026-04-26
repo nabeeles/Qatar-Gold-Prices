@@ -1,0 +1,38 @@
+# Product Design: My Gold
+
+## 1. Objective
+To provide a private, local-only portfolio tracker where users can record their physical gold purchases and monitor their current market value based on live aggregated rates in Qatar.
+
+## 2. User Stories
+*   **As a user**, I want to add my gold purchases (weight, karat, price paid) so I can keep a digital record of my assets.
+*   **As a user**, I want to see the total current value of my holdings so I know how much my portfolio is worth today.
+*   **As a user**, I want to see my unrealized profit or loss per item and in total to understand my investment performance.
+*   **As a user**, I want to know that my data is stored only on my device for maximum privacy.
+
+## 3. Data Model (Local Schema)
+**`VaultEntry` Object:**
+*   `id`: UUID (Primary Key)
+*   `label`: String (Optional, e.g., "Wedding Band", "Swiss 10g Bar")
+*   `karat`: Enum (18K, 21K, 22K, 24K)
+*   `weight`: Float (grams)
+*   `pricePerGram`: Float (The purchase price/cost basis)
+*   `purchaseDate`: ISO Date String
+*   `createdAt`: ISO Date String
+
+## 4. Valuation Logic
+*   **Market Average:** Calculated as the mean of all active providers (Al Fardan, Malabar, Joyalukkas, etc.) currently in the system for each karat.
+*   **Today's Value:** `Total Weight (per Karat) * Current Market Average (per Karat)`
+*   **Unrealized P/L:** `(Current Market Average - Price Per Gram) * Weight`
+
+## 5. UI/UX Requirements
+*   **Access:** A new "My Gold" tab in the main navigation.
+*   **Hero Dashboard:**
+    *   **Total Portfolio Value:** Large, bold gold text.
+    *   **Total Gain/Loss:** Percentage and absolute QAR, color-coded (Green for profit, Red for loss).
+    *   **Note:** "Valuation based on the market average across all providers."
+*   **Entry List:** Scrollable list of cards showing the label, weight, karat, and current performance of each entry.
+*   **Add Asset Modal:** A clean form to input weight, select karat (18K, 21K, 22K, 24K), price per gram, and optional label/date.
+
+## 6. Security & Privacy
+*   **Local Storage:** All data is stored locally on the device using SQLite.
+*   **No Cloud Sync:** Data does not leave the device, ensuring user privacy for sensitive financial holdings.

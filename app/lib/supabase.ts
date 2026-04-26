@@ -6,41 +6,43 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 /**
- * Custom storage adapter for Supabase auth that persists user sessions 
- * using Expo SecureStore.
+ * Custom storage adapter using Expo SecureStore for sensitive token handling.
  */
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => {
-    return SecureStore.getItemAsync(key);
-  },
-  setItem: (key: string, value: string) => {
-    return SecureStore.setItemAsync(key, value);
-  },
-  removeItem: (key: string) => {
-    return SecureStore.deleteItemAsync(key);
-  },
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
-/**
- * Initialized Supabase client for the Expo mobile app.
- * Configured with persistent auth and auto-refresh for long-running sessions.
- */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// Defensive initialization: Don't throw at module level
+export const supabase = (supabaseUrl && supabaseAnonKey) 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: ExpoSecureStoreAdapter,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
 
 /**
- * Signs the user in anonymously to allow personalized features (like alerts) 
- * without requiring traditional credentials.
+ * Helper to ensure supabase is initialized before use.
+ */
+export function getSupabase() {
+  if (!supabase) {
+    throw new Error('Supabase is not initialized. Please check your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables.');
+  }
+  return supabase;
+}
+
+/**
+ * Perform anonymous sign-in.
  * 
- * @returns {Promise<Object>} - Object containing Supabase session data or error.
+ * @returns {Promise<{data: any, error: any}>} Authentication data or error.
  */
 export const signInAnonymously = async () => {
+  if (!supabase) return { data: null, error: new Error('Supabase client not initialized') };
   const { data, error } = await supabase.auth.signInAnonymously();
   if (error) console.error('Error signing in anonymously:', error.message);
   return { data, error };

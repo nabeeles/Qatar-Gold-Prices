@@ -27,7 +27,7 @@
         "backgroundColor": "#0A0A0A"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 4
+      "versionCode": 17
     },
     "web": {
       "bundler": "metro",
@@ -37,7 +37,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true

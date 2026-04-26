@@ -1,7 +1,7 @@
 import React from 'react';
 import { createMaterialTopTabNavigator, MaterialTopTabNavigationOptions, MaterialTopTabNavigationEventMap } from '@react-navigation/material-top-tabs';
 import { withLayoutContext } from 'expo-router';
-import { LayoutDashboard, Calculator, LineChart, Bell } from 'lucide-react-native';
+import { LayoutDashboard, Calculator, LineChart, Bell, Briefcase } from 'lucide-react-native';
 import { ParamListBase, TabNavigationState } from '@react-navigation/native';
 
 const { Navigator } = createMaterialTopTabNavigator();
@@ -57,6 +57,13 @@ export default function TabLayout() {
         options={{
           title: 'Calculator',
           tabBarIcon: ({ color }) => <Calculator size={20} color={color} />,
+        }}
+      />
+      <MaterialTopTabs.Screen
+        name="vault"
+        options={{
+          title: 'My Gold',
+          tabBarIcon: ({ color }) => <Briefcase size={20} color={color} />,
         }}
       />
       <MaterialTopTabs.Screen
