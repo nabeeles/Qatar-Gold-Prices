@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Briefcase, TrendingUp, TrendingDown, Trash2, Calendar, Info } from 'lucide-react-native';
 import { useVault } from '../../hooks/useVault';
 import { format } from 'date-fns';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 /**
  * My Gold Screen Component
@@ -12,8 +13,6 @@ import { format } from 'date-fns';
  * - Displays the user's gold portfolio summary (Total Value, Gain/Loss).
  * - Lists individual gold holdings with detailed performance metrics.
  * - Allows adding new assets via a structured modal form.
- * 
- * Security: Local-only data processing.
  */
 export default function VaultScreen() {
   const { entries, portfolioSummary, isLoading, addEntry, deleteEntry, getAveragePrice } = useVault();
@@ -158,22 +157,65 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
   const [label, setLabel] = useState('');
   const [karat, setKarat] = useState(22);
   const [weight, setWeight] = useState('');
-  const [price, setPrice] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [pricePerGram, setPricePerGram] = useState('');
+  const [totalPrice, setTotalPrice] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Sync logic: Total Price = Price Per Gram * Weight
+  const updateFromPricePerGram = (val: string) => {
+    setPricePerGram(val);
+    const w = parseFloat(weight);
+    const p = parseFloat(val);
+    if (!isNaN(w) && !isNaN(p)) {
+      setTotalPrice((w * p).toFixed(2));
+    } else {
+      setTotalPrice('');
+    }
+  };
+
+  // Sync logic: Price Per Gram = Total Price / Weight
+  const updateFromTotalPrice = (val: string) => {
+    setTotalPrice(val);
+    const w = parseFloat(weight);
+    const t = parseFloat(val);
+    if (!isNaN(w) && w > 0 && !isNaN(t)) {
+      setPricePerGram((t / w).toFixed(2));
+    } else {
+      setPricePerGram('');
+    }
+  };
+
+  // When weight changes, update total based on existing per-gram price
+  useEffect(() => {
+    const w = parseFloat(weight);
+    const p = parseFloat(pricePerGram);
+    if (!isNaN(w) && !isNaN(p)) {
+      setTotalPrice((w * p).toFixed(2));
+    }
+  }, [weight]);
 
   const handleSave = () => {
-    if (!weight || !price) return;
+    if (!weight || !pricePerGram) return;
     onSave({
       label,
       karat,
       weight: parseFloat(weight),
-      price_per_gram: parseFloat(price),
-      purchase_date: date,
+      price_per_gram: parseFloat(pricePerGram),
+      purchase_date: date.toISOString().split('T')[0],
     });
     // Reset form
     setLabel('');
     setWeight('');
-    setPrice('');
+    setPricePerGram('');
+    setTotalPrice('');
+    setDate(new Date());
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDate(currentDate);
   };
 
   return (
@@ -219,7 +261,7 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
               </View>
 
               <View style={styles.inputRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Weight (grams)</Text>
                   <TextInput 
                     style={styles.input} 
@@ -230,27 +272,50 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
                     onChangeText={setWeight}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+              </View>
+
+              <View style={styles.inputRow}>
+                <View style={{ flex: 1, marginRight: 10 }}>
                   <Text style={styles.inputLabel}>Price per Gram (QAR)</Text>
                   <TextInput 
                     style={styles.input} 
                     keyboardType="numeric" 
                     placeholder="0.00" 
                     placeholderTextColor="#444"
-                    value={price}
-                    onChangeText={setPrice}
+                    value={pricePerGram}
+                    onChangeText={updateFromPricePerGram}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>OR Total Price (QAR)</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric" 
+                    placeholder="0.00" 
+                    placeholderTextColor="#444"
+                    value={totalPrice}
+                    onChangeText={updateFromTotalPrice}
                   />
                 </View>
               </View>
 
               <Text style={styles.inputLabel}>Purchase Date</Text>
-              <TextInput 
+              <TouchableOpacity 
                 style={styles.input} 
-                placeholder="YYYY-MM-DD" 
-                placeholderTextColor="#444"
-                value={date}
-                onChangeText={setDate}
-              />
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={{ color: '#FFF' }}>{format(date, 'yyyy-MM-dd')}</Text>
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                  maximumDate={new Date()}
+                />
+              )}
 
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={styles.saveButton} onPress={handleSave}>

@@ -31,6 +31,8 @@ To provide a private, local-only portfolio tracker where users can record their 
     *   **Total Gain/Loss:** Percentage and absolute QAR, color-coded (Green for profit, Red for loss).
     *   **Note:** "Valuation based on the market average across all providers."
 *   **Safe-Entry Modal:**
+    *   **Smart-Cost Logic:** Users can enter either the *Price per Gram* or the *Total Price*. The app automatically calculates the other based on the entered weight.
+    *   **Native Date Picker:** Intuitive calendar selection for purchase dates (constrained to today or earlier).
     *   **Keyboard Awareness:** The input form automatically shifts to remain visible when the onscreen keyboard is open.
     *   **Intuitive Dismissal:** Supports tapping outside the form to hide the keyboard.
     *   **Scrollable Inputs:** Form content is scrollable to ensure accessibility on all screen sizes.
