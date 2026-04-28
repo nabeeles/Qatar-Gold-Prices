@@ -7,6 +7,17 @@ import { format } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 /**
+ * Currency Formatter
+ * Ensures consistent 2-decimal place display for all prices.
+ */
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('en-QA', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+};
+
+/**
  * My Gold Screen Component
  * 
  * Capability:
@@ -45,7 +56,7 @@ export default function VaultScreen() {
           <View style={styles.summaryRow}>
             <View>
               <Text style={styles.summaryLabel}>Total Portfolio Value</Text>
-              <Text style={styles.totalValue}>{portfolioSummary.totalValue.toLocaleString()} QAR</Text>
+              <Text style={styles.totalValue}>{formatCurrency(portfolioSummary.totalValue)} QAR</Text>
             </View>
             <View style={styles.iconCircle}>
               <Briefcase size={24} color="#D4AF37" />
@@ -67,7 +78,7 @@ export default function VaultScreen() {
                   styles.gainText, 
                   { color: portfolioSummary.totalGainLoss >= 0 ? '#4ADE80' : '#F87171' }
                 ]}>
-                  {Math.abs(portfolioSummary.totalGainLoss).toLocaleString()} QAR ({portfolioSummary.totalGainLossPercentage.toFixed(2)}%)
+                  {formatCurrency(Math.abs(portfolioSummary.totalGainLoss))} QAR ({portfolioSummary.totalGainLossPercentage.toFixed(2)}%)
                 </Text>
               </View>
             </View>
@@ -132,7 +143,7 @@ function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice
       <View style={styles.assetBody}>
         <View>
           <Text style={styles.assetPriceLabel}>Current Value</Text>
-          <Text style={styles.assetPrice}>{currentValue.toLocaleString()} QAR</Text>
+          <Text style={styles.assetPrice}>{formatCurrency(currentValue)} QAR</Text>
         </View>
         <View style={styles.assetPerformance}>
           <Text style={styles.assetPriceLabel}>Profit/Loss</Text>
@@ -140,7 +151,7 @@ function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice
             styles.assetGain, 
             { color: gainLoss >= 0 ? '#4ADE80' : '#F87171' }
           ]}>
-            {gainLoss >= 0 ? '+' : ''}{gainLoss.toLocaleString()} QAR
+            {gainLoss >= 0 ? '+' : '-'}{formatCurrency(Math.abs(gainLoss))} QAR
           </Text>
         </View>
       </View>
