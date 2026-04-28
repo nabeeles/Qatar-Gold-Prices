@@ -220,112 +220,118 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.modalContent}
-          >
-            <View style={styles.modalHeader}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Add Gold Asset</Text>
                 <TouchableOpacity onPress={onClose} style={styles.closeModalButton}>
-                    <Text style={{ color: '#D4AF37', fontWeight: 'bold' }}>Close</Text>
+                  <Text style={{ color: '#D4AF37', fontWeight: 'bold' }}>Close</Text>
                 </TouchableOpacity>
-            </View>
-            
-            <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
-              <Text style={styles.inputLabel}>Label (Optional)</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="e.g. Wedding Ring" 
-                placeholderTextColor="#444"
-                value={label}
-                onChangeText={setLabel}
-              />
+              </View>
+              
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                style={{ width: '100%' }}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Text style={styles.inputLabel}>Label (Optional)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="e.g. Wedding Ring" 
+                  placeholderTextColor="#444"
+                  value={label}
+                  onChangeText={setLabel}
+                />
 
-              <View style={styles.inputRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.inputLabel}>Karat</Text>
-                  <View style={styles.karatPicker}>
-                    {[18, 21, 22, 24].map((k) => (
-                      <TouchableOpacity 
-                        key={k} 
-                        style={[styles.karatOption, karat === k && styles.karatSelected]}
-                        onPress={() => setKarat(k)}
-                      >
-                        <Text style={[styles.karatText, karat === k && styles.karatTextSelected]}>{k}K</Text>
-                      </TouchableOpacity>
-                    ))}
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={styles.inputLabel}>Karat</Text>
+                    <View style={styles.karatPicker}>
+                      {[18, 21, 22, 24].map((k) => (
+                        <TouchableOpacity 
+                          key={k} 
+                          style={[styles.karatOption, karat === k && styles.karatSelected]}
+                          onPress={() => setKarat(k)}
+                        >
+                          <Text style={[styles.karatText, karat === k && styles.karatTextSelected]}>{k}K</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.inputRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Weight (grams)</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    keyboardType="numeric" 
-                    placeholder="0.00" 
-                    placeholderTextColor="#444"
-                    value={weight}
-                    onChangeText={setWeight}
-                  />
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Weight (grams)</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      keyboardType="numeric" 
+                      placeholder="0.00" 
+                      placeholderTextColor="#444"
+                      value={weight}
+                      onChangeText={setWeight}
+                    />
+                  </View>
                 </View>
-              </View>
 
-              <View style={styles.inputRow}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                  <Text style={styles.inputLabel}>Price per Gram (QAR)</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    keyboardType="numeric" 
-                    placeholder="0.00" 
-                    placeholderTextColor="#444"
-                    value={pricePerGram}
-                    onChangeText={updateFromPricePerGram}
-                  />
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={styles.inputLabel}>Price per Gram (QAR)</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      keyboardType="numeric" 
+                      placeholder="0.00" 
+                      placeholderTextColor="#444"
+                      value={pricePerGram}
+                      onChangeText={updateFromPricePerGram}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>OR Total Price (QAR)</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      keyboardType="numeric" 
+                      placeholder="0.00" 
+                      placeholderTextColor="#444"
+                      value={totalPrice}
+                      onChangeText={updateFromTotalPrice}
+                    />
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>OR Total Price (QAR)</Text>
-                  <TextInput 
-                    style={styles.input} 
-                    keyboardType="numeric" 
-                    placeholder="0.00" 
-                    placeholderTextColor="#444"
-                    value={totalPrice}
-                    onChangeText={updateFromTotalPrice}
-                  />
-                </View>
-              </View>
 
-              <Text style={styles.inputLabel}>Purchase Date</Text>
-              <TouchableOpacity 
-                style={styles.input} 
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={{ color: '#FFF' }}>{format(date, 'yyyy-MM-dd')}</Text>
-              </TouchableOpacity>
-
-              {showDatePicker && (
-                <DateTimePicker
-                  value={date}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onDateChange}
-                  maximumDate={new Date()}
-                />
-              )}
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                  <Text style={styles.saveButtonText}>Save to My Gold</Text>
+                <Text style={styles.inputLabel}>Purchase Date</Text>
+                <TouchableOpacity 
+                  style={styles.input} 
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: '#FFF' }}>{format(date, 'yyyy-MM-dd')}</Text>
                 </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </TouchableWithoutFeedback>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                    maximumDate={new Date()}
+                  />
+                )}
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                    <Text style={styles.saveButtonText}>Save to My Gold</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -514,7 +520,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 25,
     paddingBottom: Platform.OS === 'ios' ? 40 : 25,
-    maxHeight: '90%',
+    maxHeight: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
