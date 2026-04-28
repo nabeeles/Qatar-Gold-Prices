@@ -25,9 +25,10 @@ async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
   const browser = await puppeteer.launch({ 
     headless: true,
-    args: [] // Security: Sandbox enabled by default in latest audit remediation.
+    args: ['--no-sandbox', '--disable-setuid-sandbox'] // Security: Required for many CI environments including GitHub Actions.
   });
-  
+...
+
   try {
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');

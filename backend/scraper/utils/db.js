@@ -1,4 +1,12 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const path = require('path');
+const fs = require('fs');
+
+// Only load .env if it exists (for local development)
+const envPath = path.resolve(__dirname, '../../.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath });
+}
+
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;
