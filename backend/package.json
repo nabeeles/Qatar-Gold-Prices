@@ -12,10 +12,14 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
-    "axios": "^1.15.0",
+    "axios": "^1.15.2",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
     "expo-server-sdk": "^6.1.0",
     "puppeteer": "^24.40.0"
+  },
+  "overrides": {
+    "follow-redirects": "^1.16.0",
+    "basic-ftp": "^5.2.3"
   }
 }
