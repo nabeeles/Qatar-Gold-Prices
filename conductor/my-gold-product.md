@@ -29,6 +29,7 @@ To provide a private, local-only portfolio tracker where users can record their 
 *   **Hero Dashboard:**
     *   **Total Portfolio Value:** Large, bold gold text.
     *   **Total Gain/Loss:** Percentage and absolute QAR, color-coded (Green for profit, Red for loss).
+    *   **Precision Display:** All prices and valuations are formatted to exactly **two decimal places** for professional clarity.
     *   **Note:** "Valuation based on the market average across all providers."
 *   **Safe-Entry Modal:**
     *   **Smart-Cost Logic:** Users can enter either the *Price per Gram* or the *Total Price*. The app automatically calculates the other based on the entered weight.
