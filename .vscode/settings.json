@@ -1,0 +1,6 @@
+{
+    "snyk.advanced.organization": "4a3089cf-3126-428b-aaff-1f1222fcffba",
+    "snyk.advanced.autoSelectOrganization": true,
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.configuration.updateBuildConfiguration": "automatic"
+}
