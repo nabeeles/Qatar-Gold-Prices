@@ -49,13 +49,19 @@ async function scrapeWithPuppeteer(provider) {
     if (provider.name.includes('Malabar')) {
         // Malabar's price table is region-locked; we must explicitly select 'QA' to trigger the AJAX update.
         console.log('   Synchronizing regional context (Qatar) for Malabar...');
-        await page.select('#gold-country-list', 'QA');
-        await page.evaluate(() => {
-            const btn = document.querySelector('.gold-rate-btn') || document.querySelector('button.gold-rate-btn');
-            if (btn) btn.click();
-        });
-        // 12s wait accounts for heavy client-side hydration and network latency in the Middle East region.
-        await new Promise(r => setTimeout(r, 12000));
+        
+        try {
+            await page.waitForSelector('#gold-country-list', { timeout: 15000 });
+            await page.select('#gold-country-list', 'QA');
+            await page.evaluate(() => {
+                const btn = document.querySelector('.gold-rate-btn') || document.querySelector('button.gold-rate-btn');
+                if (btn) btn.click();
+            });
+            // 12s wait accounts for heavy client-side hydration and network latency in the Middle East region.
+            await new Promise(r => setTimeout(r, 12000));
+        } catch (mErr) {
+            console.warn(`   [Warn] Malabar interaction failed: ${mErr.message}. Attempting direct extraction...`);
+        }
     } 
     else if (provider.name.includes('Shine')) {
         // Shine requires a significant stabilization period for their pricing table to mount.
