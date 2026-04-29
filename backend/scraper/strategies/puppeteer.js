@@ -27,7 +27,6 @@ async function scrapeWithPuppeteer(provider) {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'] // Security: Required for many CI environments including GitHub Actions.
   });
-...
 
   try {
     const page = await browser.newPage();
