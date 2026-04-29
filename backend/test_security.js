@@ -1,14 +1,15 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, './.env') });
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = 'https://aduvipcrjumffudkkfab.supabase.co';
-// Use the public anon key here (replace with your actual anon key from Supabase Dashboard)
-const supabaseAnonKey = 'sb_publishable_ZGe5fDuC1mzz4shVyz0DKA_xuf-4ci4'; 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 async function runSecurityTests() {
   console.log('--- Supabase Security & RLS Validation ---\n');
 
-  if (supabaseAnonKey === 'sb_publishable_replace_me') {
-      console.error('❌ ERROR: Please replace "sb_publishable_replace_me" with your actual Supabase ANON KEY to run this test.');
+  if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('❌ ERROR: Missing SUPABASE_URL or SUPABASE_ANON_KEY in environment.');
+      console.log('   (Ensure these are set in your backend/.env file)');
       return;
   }
 
