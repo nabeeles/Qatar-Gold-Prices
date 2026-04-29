@@ -34,7 +34,16 @@ async function scrapeWithPuppeteer(provider) {
     await page.setViewport({ width: 1280, height: 1200 });
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
-    await page.goto(provider.url, { waitUntil: 'networkidle2', timeout: 60000 });
+    
+    // Strategy: Use 'load' instead of 'networkidle2' as many sites (like Al Fardan) 
+    // have persistent background sockets that cause idle-based timeouts.
+    const navEvent = provider.name.includes('Fardan') ? 'domcontentloaded' : 'load';
+    
+    try {
+        await page.goto(provider.url, { waitUntil: navEvent, timeout: 60000 });
+    } catch (gotoError) {
+        console.warn(`   [Warn] Primary navigation event '${navEvent}' timed out, attempting extraction anyway...`);
+    }
     
     // --- 1. Provider-Specific Hydration & Interaction ---
     if (provider.name.includes('Malabar')) {
