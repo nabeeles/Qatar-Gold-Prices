@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Briefcase, TrendingUp, TrendingDown, Trash2, Calendar, Info } from 'lucide-react-native';
 import { useVault } from '../../hooks/useVault';
@@ -19,11 +19,6 @@ const formatCurrency = (value: number) => {
 
 /**
  * My Gold Screen Component
- * 
- * Capability:
- * - Displays the user's gold portfolio summary (Total Value, Gain/Loss).
- * - Lists individual gold holdings with detailed performance metrics.
- * - Allows adding new assets via a structured modal form.
  */
 export default function VaultScreen() {
   const { entries, portfolioSummary, isLoading, addEntry, deleteEntry, getAveragePrice } = useVault();
@@ -173,53 +168,59 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Sync logic: Total Price = Price Per Gram * Weight
-  const updateFromPricePerGram = (val: string) => {
-    setPricePerGram(val);
-    const w = parseFloat(weight);
-    const p = parseFloat(val);
-    if (!isNaN(w) && !isNaN(p)) {
-      setTotalPrice((w * p).toFixed(2));
-    } else {
-      setTotalPrice('');
-    }
-  };
+  // Tracks which field was last modified by the user to maintain logical priority
+  const [lastModified, setLastModified] = useState<'perGram' | 'total' | null>(null);
 
-  // Sync logic: Price Per Gram = Total Price / Weight
-  const updateFromTotalPrice = (val: string) => {
-    setTotalPrice(val);
-    const w = parseFloat(weight);
-    const t = parseFloat(val);
-    if (!isNaN(w) && w > 0 && !isNaN(t)) {
-      setPricePerGram((t / w).toFixed(2));
-    } else {
-      setPricePerGram('');
-    }
-  };
-
-  // When weight changes, update total based on existing per-gram price
+  // Sync logic: Recalculate based on current state and last interaction
   useEffect(() => {
     const w = parseFloat(weight);
-    const p = parseFloat(pricePerGram);
-    if (!isNaN(w) && !isNaN(p)) {
-      setTotalPrice((w * p).toFixed(2));
+    if (isNaN(w) || w <= 0) return;
+
+    if (lastModified === 'perGram') {
+        const p = parseFloat(pricePerGram);
+        if (!isNaN(p)) {
+            setTotalPrice((w * p).toFixed(2));
+        }
+    } else if (lastModified === 'total') {
+        const t = parseFloat(totalPrice);
+        if (!isNaN(t)) {
+            setPricePerGram((t / w).toFixed(2));
+        }
     }
-  }, [weight]);
+  }, [weight, pricePerGram, totalPrice, lastModified]);
 
   const handleSave = () => {
-    if (!weight || !pricePerGram) return;
+    const w = parseFloat(weight);
+    const p = parseFloat(pricePerGram);
+    const t = parseFloat(totalPrice);
+
+    if (isNaN(w) || w <= 0) {
+        Alert.alert('Validation Error', 'Please enter a valid gold weight.');
+        return;
+    }
+
+    if (isNaN(p) && isNaN(t)) {
+        Alert.alert('Validation Error', 'Please enter either the price per gram or the total purchase price.');
+        return;
+    }
+
+    // Determine the most accurate price per gram
+    const finalPricePerGram = !isNaN(p) ? p : (t / w);
+
     onSave({
       label,
       karat,
-      weight: parseFloat(weight),
-      price_per_gram: parseFloat(pricePerGram),
+      weight: w,
+      price_per_gram: finalPricePerGram,
       purchase_date: date.toISOString().split('T')[0],
     });
+
     // Reset form
     setLabel('');
     setWeight('');
     setPricePerGram('');
     setTotalPrice('');
+    setLastModified(null);
     setDate(new Date());
   };
 
@@ -299,7 +300,10 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
                       placeholder="0.00" 
                       placeholderTextColor="#444"
                       value={pricePerGram}
-                      onChangeText={updateFromPricePerGram}
+                      onChangeText={(val) => {
+                          setPricePerGram(val);
+                          setLastModified('perGram');
+                      }}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -310,7 +314,10 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
                       placeholder="0.00" 
                       placeholderTextColor="#444"
                       value={totalPrice}
-                      onChangeText={updateFromTotalPrice}
+                      onChangeText={(val) => {
+                          setTotalPrice(val);
+                          setLastModified('total');
+                      }}
                     />
                   </View>
                 </View>
