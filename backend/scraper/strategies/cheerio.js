@@ -5,49 +5,43 @@ const cheerio = require('cheerio');
  * Scrapes gold prices using a static HTML parsing strategy with Cheerio.
  * 
  * Orchestration Flow:
- * 1. Executes an HTTP GET request to the provider URL with professional browser headers.
- * 2. Loads the response body into a Cheerio (jQuery-like) instance.
- * 3. Primary Discovery: Iterates through table rows (<tr>) to find labels matching the karat selectors.
- * 4. Secondary Fallback: If table extraction fails, executes a Regular Expression match on the normalized body text.
+ * 1. Executes an HTTP GET request to the provider URL.
+ * 2. Parses the resulting HTML into a traversable DOM.
+ * 3. Identifies pricing components using a multi-strategy heuristic.
  * 
  * @async
  * @function scrapeWithCheerio
- * @param {Object} provider - The data provider configuration object.
- * @param {string} provider.name - Name of the retail provider.
- * @param {string} provider.url - Target URL for price extraction.
- * @param {Object} provider.selectors - Key-value pairs for karat-specific search terms.
- * @returns {Promise<Object|null>} - Returns a mapping of karats to prices or null if an error occurs.
- * @throws {Error} - Propagates network or parsing exceptions with detailed logs.
+ * @param {Object} provider - Metadata for the retail or aggregator source.
+ * @returns {Promise<Object|null>} - Returns found prices or null on network/validation failure.
  */
 async function scrapeWithCheerio(provider) {
-  console.log(`[Cheerio] Synchronizing market data for ${provider.name}...`);
-  
   try {
-    const { data } = await axios.get(provider.url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      },
-      timeout: 30000
+    console.log(`[Cheerio] Synchronizing market data for ${provider.name}...`);
+    const { data: html } = await axios.get(provider.url, {
+        timeout: 30000,
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        }
     });
-
-    const $ = cheerio.load(data);
+    
+    const $ = cheerio.load(html);
     const results = {};
     const bodyText = $('body').text().replace(/\s+/g, ' ');
 
     /**
-     * Internal utility to isolate prices from unstructured text or table data.
-     * @param {string} karatLabel - The label to search for (e.g., "24k").
+     * Heuristic Engine: Finds numeric price values associated with a karat label.
+     * @param {string} karatLabel - The target karat string (e.g., '24K').
      */
     const findPrice = (karatLabel) => {
         let price = null;
         
-        // Strategy A: Targeted Table Row Search
-        $('tr').each((i, row) => {
-            const rowText = $(row).text();
-            if (rowText.includes(karatLabel)) {
-                const numbers = rowText.match(/\d+(?:\.\d+)?/g);
-                if (numbers) {
-                    // Filter out the karat number itself to identify the price component
+        // Strategy A: DOM Proximity Search
+        $(`*:contains("${karatLabel}")`).each((i, el) => {
+            if (price) return;
+            const text = $(el).text();
+            const numbers = text.match(/(\d{3,}(?:\.\d+)?)/g);
+            if (numbers) {
+                if (text.includes('QAR') || text.includes('﷼') || text.includes('Rate')) {
                     const karatNum = karatLabel.match(/\d+/)[0];
                     const found = numbers.find(n => n !== karatNum);
                     if (found) price = found;
@@ -55,7 +49,17 @@ async function scrapeWithCheerio(provider) {
             }
         });
 
-        // Strategy B: Heuristic Body Text Regex Fallback
+        // Strategy B: Global Stream Scanning (Next logical number)
+        if (!price) {
+            const index = bodyText.indexOf(karatLabel);
+            if (index !== -1) {
+                const afterText = bodyText.substring(index, index + 100);
+                const match = afterText.match(/(\d{3,}(?:\.\d+)?)/);
+                if (match) price = match[1];
+            }
+        }
+
+        // Strategy C: Exact RegEx Fallback
         if (!price) {
             const regex = new RegExp(`${karatLabel}\\s*\\/g\\s*[^\\d]*(\\d+(?:\\.\\d+)?)`, 'i');
             const match = bodyText.match(regex);

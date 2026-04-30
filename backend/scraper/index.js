@@ -1,20 +1,20 @@
 const { getActiveProviders, savePrices } = require('./utils/db');
 const { scrapeWithPuppeteer } = require('./strategies/puppeteer');
+const { scrapeWithCheerio } = require('./strategies/cheerio');
 const { checkAndSendAlerts } = require('./utils/alerts');
 
 /**
  * Main scraper entry point.
  * 
- * Flow:
- * 1. Fetch all active gold price providers from Supabase.
- * 2. For each provider, launch a Puppeteer instance to scrape the latest prices.
- * 3. Save extracted prices (24k, 22k, 21k, 18k) to the gold_prices table.
- * 4. After all scraping is complete, calculate the average price for each karat.
- * 5. Trigger the alert system to check user-defined price alerts based on these averages.
+ * Capability Overview:
+ * 1. Orchestrates the full market synchronization cycle.
+ * 2. Dynamically dispatches scraping tasks to either Puppeteer (Direct) or Cheerio (Aggregator) engines.
+ * 3. Aggregates results into a global spot average for QAR.
+ * 4. Triggers threshold alerts for registered mobile clients.
  */
 async function runScraper() {
   console.log('--- Starting Qatar Gold Price Scraper ---');
-  console.log(`Time: ${new Date().toISOString()}`);
+  console.log('Time:', new Date().toISOString());
 
   try {
     const providers = await getActiveProviders();
@@ -24,7 +24,9 @@ async function runScraper() {
 
     for (const provider of providers) {
       try {
-        const prices = await scrapeWithPuppeteer(provider);
+        // Dynamic Dispatch: Route based on provider metadata
+        const strategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
+        const prices = await strategy(provider);
 
         if (prices && Object.keys(prices).some(k => k.match(/\d+k/i) && prices[k])) {
           console.log(`✅ Extracted prices for ${provider.name}:`, prices);
@@ -48,13 +50,19 @@ async function runScraper() {
 
     // After all providers are scraped, check alerts using the averages
     if (allScrapedPrices.length > 0) {
-        const uniqueKarats = [...new Set(allScrapedPrices.map(p => p.karat))];
-        const averages = uniqueKarats.map(k => {
-            const group = allScrapedPrices.filter(p => p.karat === k);
-            return {
-                karat: k,
-                price: group.reduce((acc, curr) => acc + curr.price, 0) / group.length
-            };
+        console.log('--- Commencing Market Threshold Validation ---');
+        
+        // Calculate spot averages across all successful extractions
+        const dailyMap = {};
+        allScrapedPrices.forEach(item => {
+            if (!dailyMap[item.karat]) dailyMap[item.karat] = { total: 0, count: 0 };
+            dailyMap[item.karat].total += item.price;
+            dailyMap[item.karat].count += 1;
+        });
+
+        const averages = {};
+        Object.keys(dailyMap).forEach(karat => {
+            averages[karat] = dailyMap[karat].total / dailyMap[karat].count;
         });
         
         await checkAndSendAlerts(averages);
