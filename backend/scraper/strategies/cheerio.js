@@ -8,11 +8,6 @@ const cheerio = require('cheerio');
  * 1. Executes an HTTP GET request to the provider URL.
  * 2. Parses the resulting HTML into a traversable DOM.
  * 3. Identifies pricing components using a multi-strategy heuristic.
- * 
- * @async
- * @function scrapeWithCheerio
- * @param {Object} provider - Metadata for the retail or aggregator source.
- * @returns {Promise<Object|null>} - Returns found prices or null on network/validation failure.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -30,7 +25,7 @@ async function scrapeWithCheerio(provider) {
 
     /**
      * Heuristic Engine: Finds numeric price values associated with a karat label.
-     * @param {string} karatLabel - The target karat string (e.g., '24K').
+     * Skips values that look like years (e.g., 2026) to ensure accuracy.
      */
     const findPrice = (karatLabel) => {
         let price = null;
@@ -39,13 +34,14 @@ async function scrapeWithCheerio(provider) {
         $(`*:contains("${karatLabel}")`).each((i, el) => {
             if (price) return;
             const text = $(el).text();
+            // Match numbers that are likely gold prices (e.g. 250.50) and not years (2024-2030)
             const numbers = text.match(/(\d{3,}(?:\.\d+)?)/g);
             if (numbers) {
-                if (text.includes('QAR') || text.includes('﷼') || text.includes('Rate')) {
-                    const karatNum = karatLabel.match(/\d+/)[0];
-                    const found = numbers.find(n => n !== karatNum);
-                    if (found) price = found;
-                }
+                const found = numbers.find(n => {
+                    const val = parseFloat(n);
+                    return val > 100 && val < 2000; // Realistic price range for 1g of gold
+                });
+                if (found) price = found;
             }
         });
 
@@ -53,17 +49,16 @@ async function scrapeWithCheerio(provider) {
         if (!price) {
             const index = bodyText.indexOf(karatLabel);
             if (index !== -1) {
-                const afterText = bodyText.substring(index, index + 100);
-                const match = afterText.match(/(\d{3,}(?:\.\d+)?)/);
-                if (match) price = match[1];
+                const afterText = bodyText.substring(index, index + 200);
+                const matches = afterText.match(/(\d{3,}(?:\.\d+)?)/g);
+                if (matches) {
+                    const found = matches.find(n => {
+                        const val = parseFloat(n);
+                        return val > 100 && val < 2000;
+                    });
+                    if (found) price = found;
+                }
             }
-        }
-
-        // Strategy C: Exact RegEx Fallback
-        if (!price) {
-            const regex = new RegExp(`${karatLabel}\\s*\\/g\\s*[^\\d]*(\\d+(?:\\.\\d+)?)`, 'i');
-            const match = bodyText.match(regex);
-            if (match) price = match[1];
         }
 
         return price;
