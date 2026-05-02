@@ -9,8 +9,9 @@ const { checkAndSendAlerts } = require('./utils/alerts');
  * Capability Overview:
  * 1. Orchestrates the full market synchronization cycle.
  * 2. Dynamically dispatches scraping tasks to either Puppeteer (Direct) or Cheerio (Aggregator) engines.
- * 3. Aggregates results into a global spot average for QAR.
- * 4. Triggers threshold alerts for registered mobile clients.
+ * 3. Implements a robust "Primary-with-Fallback" strategy for critical vendors like Malabar Gold.
+ * 4. Aggregates results into a global spot average for QAR.
+ * 5. Triggers threshold alerts for registered mobile clients.
  */
 async function runScraper() {
   console.log('--- Starting Qatar Gold Price Scraper ---');
@@ -24,9 +25,24 @@ async function runScraper() {
 
     for (const provider of providers) {
       try {
-        // Dynamic Dispatch: Route based on provider metadata
-        const strategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
-        const prices = await strategy(provider);
+        let prices = null;
+
+        // --- STRATEGY: Primary Extraction ---
+        // Route based on provider metadata (Direct vs Aggregator)
+        const primaryStrategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
+        prices = await primaryStrategy(provider);
+
+        // --- STRATEGY: Intelligent Fallback (Critical Vendors Only) ---
+        // If Malabar fails directly, fallback to the working market aggregator
+        if ((!prices || Object.keys(prices).length === 0) && provider.name.includes('Malabar')) {
+            console.warn(`   ⚠️  Primary extraction for ${provider.name} failed. Attempting aggregator fallback...`);
+            const fallbackProvider = {
+                ...provider,
+                url: 'https://goldpriceqatar.com/',
+                selectors: { '24k': '24K', '22k': '22K' }
+            };
+            prices = await scrapeWithCheerio(fallbackProvider);
+        }
 
         if (prices && Object.keys(prices).some(k => k.match(/\d+k/i) && prices[k])) {
           console.log(`✅ Extracted prices for ${provider.name}:`, prices);

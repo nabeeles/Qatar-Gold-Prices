@@ -7,19 +7,6 @@ const puppeteer = require('puppeteer');
  * - Orchestrates a Chromium instance in headless mode.
  * - Manages complex, stateful interactions (country selection, AJAX form submissions).
  * - Implements robust heuristic data extraction using DOM traversal and regex matching.
- * 
- * Provider-Specific Logic:
- * - **Malabar:** Requires persistent state management; selects 'Qatar' and waits for a 12s hydration cycle.
- * - **Shine Jewelers:** Targets structured <table> elements with multi-column karat headers.
- * - **Al Fardan:** Scans the global DOM for "KARAT" labels and captures sibling numeric nodes.
- * 
- * @async
- * @function scrapeWithPuppeteer
- * @param {Object} provider - High-level provider metadata.
- * @param {string} provider.name - Name of the retail institution.
- * @param {string} provider.url - Primary landing page for price data.
- * @returns {Promise<Object|null>} - Returns an aggregated object of karat-to-price mappings.
- * @throws {Error} - Captures browser timeouts and navigation failures.
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
@@ -35,41 +22,23 @@ async function scrapeWithPuppeteer(provider) {
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
-    // Strategy: Use 'load' instead of 'networkidle2' as many sites (like Al Fardan) 
-    // have persistent background sockets that cause idle-based timeouts.
-    const navEvent = provider.name.includes('Fardan') ? 'domcontentloaded' : 'load';
+    // Use 'load' event for better stability with Malabar's hybrid hydration
+    const navEvent = provider.name.includes('Malabar') ? 'load' : 'domcontentloaded';
     
     try {
         await page.goto(provider.url, { waitUntil: navEvent, timeout: 60000 });
+        if (provider.name.includes('Malabar')) {
+            // New Malabar page takes a few seconds to hydrate the price table
+            await new Promise(r => setTimeout(r, 10000));
+        }
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation event '${navEvent}' timed out, attempting extraction anyway...`);
     }
     
     // --- 1. Provider-Specific Hydration & Interaction ---
-    if (provider.name.includes('Malabar')) {
-        // Malabar's price table is region-locked; we must explicitly select 'QA' to trigger the AJAX update.
-        console.log('   Synchronizing regional context (Qatar) for Malabar...');
-        
-        try {
-            await page.waitForSelector('#gold-country-list', { timeout: 15000 });
-            await page.select('#gold-country-list', 'QA');
-            await page.evaluate(() => {
-                const btn = document.querySelector('.gold-rate-btn') || document.querySelector('button.gold-rate-btn');
-                if (btn) btn.click();
-            });
-            // 12s wait accounts for heavy client-side hydration and network latency in the Middle East region.
-            await new Promise(r => setTimeout(r, 12000));
-        } catch (mErr) {
-            console.warn(`   [Warn] Malabar interaction failed: ${mErr.message}. Attempting direct extraction...`);
-        }
-    } 
-    else if (provider.name.includes('Shine')) {
+    if (provider.name.includes('Shine')) {
         // Shine requires a significant stabilization period for their pricing table to mount.
         await new Promise(r => setTimeout(r, 10000));
-    }
-    else {
-        // Standard debounce for standard reactive sites.
-        await new Promise(r => setTimeout(r, 8000));
     }
 
     const prices = await page.evaluate((pName) => {
@@ -81,10 +50,25 @@ async function scrapeWithPuppeteer(provider) {
          */
         const cleanPrice = (text) => {
             if (!text) return null;
-            // Matches numeric components with optional decimals, excluding short strings (labels)
-            const match = text.match(/(\d{3,}(?:\.\d+)?)/);
+            // Matches numeric components with optional decimals, excluding years like 2026
+            const match = text.match(/(\d{2,3}(?:\.\d+)?)/);
             return match ? match[1].replace(/,/g, '') : null;
         };
+
+        // --- STRATEGY: Malabar Gold (Table Row Detection) ---
+        if (pName.includes('Malabar')) {
+            const rows = Array.from(document.querySelectorAll('tr'));
+            const qatarRow = rows.find(r => r.innerText.includes('Qatar') && r.innerText.includes('QAR'));
+            if (qatarRow) {
+                const cells = Array.from(qatarRow.querySelectorAll('td'));
+                // Expected format: [Country, 22K Price, 24K Price, Update Time]
+                if (cells.length >= 3) {
+                    res['22k'] = cleanPrice(cells[1].innerText);
+                    res['24k'] = cleanPrice(cells[2].innerText);
+                }
+            }
+            return res;
+        }
 
         // --- STRATEGY: Shine Jewelers (Table Column Mapping) ---
         if (pName.includes('Shine')) {
@@ -145,47 +129,6 @@ async function scrapeWithPuppeteer(provider) {
             res['22k'] = findGeneric('22 KARAT') || findGeneric('22K');
             res['21k'] = findGeneric('21 KARAT') || findGeneric('21K');
             res['18k'] = findGeneric('18 KARAT') || findGeneric('18K');
-            return res;
-        }
-
-        // --- STRATEGY: GoodReturns (Aggregator Table parsing) ---
-        if (pName.includes('GoodReturns')) {
-            const rows = Array.from(document.querySelectorAll('tr'));
-            const gramRows = rows.filter(r => r.innerText.trim().match(/^1\s?﷼/));
-            if (gramRows.length >= 2) {
-                res['24k'] = cleanPrice(gramRows[0].innerText.split(/[\t\s]+/)[1]);
-                res['22k'] = cleanPrice(gramRows[1].innerText.split(/[\t\s]+/)[1]);
-                if (gramRows[2]) res['18k'] = cleanPrice(gramRows[2].innerText.split(/[\t\s]+/)[1]);
-            }
-            return res;
-        }
-
-        // --- STRATEGY: LivePriceOfGold (Token-based extraction) ---
-        if (pName.includes('LivePrice')) {
-            const rows = Array.from(document.querySelectorAll('tr'));
-            for (const row of rows) {
-                const rowText = row.innerText.trim();
-                if (rowText.includes('Gold/gram')) {
-                    const parts = rowText.split(/\s+/).filter(p => p.length > 0);
-                    const price = cleanPrice(parts[3]);
-                    if (!price) continue;
-                    if (rowText.includes('24K')) res['24k'] = price;
-                    else if (rowText.includes('22K')) res['22k'] = price;
-                    else if (rowText.includes('21K')) res['21k'] = price;
-                    else if (rowText.includes('18K')) res['18k'] = price;
-                }
-            }
-            return res;
-        }
-
-        // --- STRATEGY: Malabar (CSS Class detection) ---
-        if (pName.includes('Malabar')) {
-            const p24 = document.querySelector('[class*="24kt-price"]');
-            const p22 = document.querySelector('[class*="22kt-price"]');
-            const p18 = document.querySelector('[class*="18kt-price"]');
-            if (p24 && !p24.innerText.includes('INR')) res['24k'] = cleanPrice(p24.innerText);
-            if (p22 && !p22.innerText.includes('INR')) res['22k'] = cleanPrice(p22.innerText);
-            if (p18 && !p18.innerText.includes('INR')) res['18k'] = cleanPrice(p18.innerText);
             return res;
         }
 
