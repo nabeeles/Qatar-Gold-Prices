@@ -76,12 +76,13 @@ async function runScraper() {
             dailyMap[item.karat].count += 1;
         });
 
-        const averages = {};
-        Object.keys(dailyMap).forEach(karat => {
-            averages[karat] = dailyMap[karat].total / dailyMap[karat].count;
-        });
+        // Convert map to Array format expected by alerts.js: [{ karat: 24, price: 550.50 }]
+        const latestAverages = Object.keys(dailyMap).map(karat => ({
+            karat: parseInt(karat),
+            price: dailyMap[karat].total / dailyMap[karat].count
+        }));
         
-        await checkAndSendAlerts(averages);
+        await checkAndSendAlerts(latestAverages);
     }
 
     console.log('--- Scraper Run Finished ---');
