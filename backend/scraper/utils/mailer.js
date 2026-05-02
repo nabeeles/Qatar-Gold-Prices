@@ -50,4 +50,36 @@ async function sendHealthAlert(failures) {
   }
 }
 
-module.exports = { sendHealthAlert };
+/**
+ * Sends an alert when a primary source fails and the system successfully uses a fallback.
+ * @param {string} providerName - Name of the provider.
+ * @param {string} error - The primary error that triggered the fallback.
+ */
+async function sendFallbackAlert(providerName, error) {
+  if (!process.env.NOTIFICATION_EMAIL) return;
+
+  const mailOptions = {
+    from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
+    to: process.env.NOTIFICATION_EMAIL,
+    subject: `⚠️ Gold Scraper Fallback: ${providerName}`,
+    html: `
+      <h2>Primary Source Failure - Fallback Utilized</h2>
+      <p>The scraper for <b>${providerName}</b> failed to reach its primary direct source.</p>
+      <p><b>Primary Error:</b> ${error}</p>
+      <p>✅ <b>Action Taken:</b> The system successfully retrieved market data using the aggregator fail-safe.</p>
+      <p>No immediate action is required, but you may want to check if the primary URL or website structure has changed.</p>
+      <br/>
+      <hr/>
+      <p><small>Automated Message from Qatar Gold Price Backend</small></p>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[Mailer] Fallback alert sent for ${providerName}`);
+  } catch (err) {
+    console.error('[Mailer] Failed to send fallback alert:', err.message);
+  }
+}
+
+module.exports = { sendHealthAlert, sendFallbackAlert };

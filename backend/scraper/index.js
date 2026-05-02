@@ -2,16 +2,10 @@ const { getActiveProviders, savePrices } = require('./utils/db');
 const { scrapeWithPuppeteer } = require('./strategies/puppeteer');
 const { scrapeWithCheerio } = require('./strategies/cheerio');
 const { checkAndSendAlerts } = require('./utils/alerts');
+const { sendFallbackAlert } = require('./utils/mailer');
 
 /**
  * Main scraper entry point.
- * 
- * Capability Overview:
- * 1. Orchestrates the full market synchronization cycle.
- * 2. Dynamically dispatches scraping tasks to either Puppeteer (Direct) or Cheerio (Aggregator) engines.
- * 3. Implements a robust "Primary-with-Fallback" strategy for critical vendors like Malabar Gold.
- * 4. Aggregates results into a global spot average for QAR.
- * 5. Triggers threshold alerts for registered mobile clients.
  */
 async function runScraper() {
   console.log('--- Starting Qatar Gold Price Scraper ---');
@@ -26,22 +20,32 @@ async function runScraper() {
     for (const provider of providers) {
       try {
         let prices = null;
+        let usedFallback = false;
+        let primaryError = null;
 
         // --- STRATEGY: Primary Extraction ---
-        // Route based on provider metadata (Direct vs Aggregator)
-        const primaryStrategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
-        prices = await primaryStrategy(provider);
+        try {
+            const primaryStrategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
+            prices = await primaryStrategy(provider);
+        } catch (err) {
+            primaryError = err.message;
+        }
 
         // --- STRATEGY: Intelligent Fallback (Critical Vendors Only) ---
-        // If Malabar fails directly, fallback to the working market aggregator
         if ((!prices || Object.keys(prices).length === 0) && provider.name.includes('Malabar')) {
             console.warn(`   ⚠️  Primary extraction for ${provider.name} failed. Attempting aggregator fallback...`);
+            usedFallback = true;
             const fallbackProvider = {
                 ...provider,
                 url: 'https://goldpriceqatar.com/',
                 selectors: { '24k': '24K', '22k': '22K' }
             };
             prices = await scrapeWithCheerio(fallbackProvider);
+            
+            // Inform admin that fail-safe was used
+            if (prices && Object.keys(prices).length > 0) {
+                await sendFallbackAlert(provider.name, primaryError || 'Navigation timeout / Empty result');
+            }
         }
 
         if (prices && Object.keys(prices).some(k => k.match(/\d+k/i) && prices[k])) {
