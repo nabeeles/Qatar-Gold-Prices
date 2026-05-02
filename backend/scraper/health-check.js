@@ -11,6 +11,23 @@ const { sendHealthAlert } = require('./utils/mailer');
  * If any provider fails to return data, notify the administrator via email.
  */
 
+/**
+ * Sanitizes strings for safe inclusion in HTML templates.
+ * Prevents XSS (Cross-Site Scripting) from malicious or unexpected error messages.
+ */
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/[&<>"']/g, function(m) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    }[m];
+  });
+}
+
 async function runHealthCheck() {
   console.log('--- Starting Daily Provider Health Check ---');
   console.log('Time:', new Date().toISOString());
@@ -33,13 +50,21 @@ async function runHealthCheck() {
         }
 
         if (!result || Object.keys(result).length === 0 || (!result['24k'] && !result['22k'])) {
-          failures.push({ name: provider.name, error: 'No valid price data returned' });
+          // Sanitize provider name and custom error message
+          failures.push({ 
+            name: escapeHTML(provider.name), 
+            error: 'No valid price data returned' 
+          });
           console.warn(`   ❌ ${provider.name}: FAILED (Empty Result)`);
         } else {
           console.log(`   ✅ ${provider.name}: OK`);
         }
       } catch (err) {
-        failures.push({ name: provider.name, error: err.message });
+        // Sanitize the raw exception message before persisting/dispatching
+        failures.push({ 
+          name: escapeHTML(provider.name), 
+          error: escapeHTML(err.message) 
+        });
         console.error(`   ❌ ${provider.name}: FAILED (${err.message})`);
       }
     }

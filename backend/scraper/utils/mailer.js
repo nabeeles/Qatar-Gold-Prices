@@ -14,6 +14,23 @@ const transporter = nodemailer.createTransport({
 });
 
 /**
+ * Sanitizes strings for safe inclusion in HTML templates.
+ * Prevents XSS (Cross-Site Scripting) from malicious or unexpected error messages.
+ */
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.toString().replace(/[&<>"']/g, function(m) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    }[m];
+  });
+}
+
+/**
  * Sends a health alert email with the list of failed providers.
  * @param {Array} failures - Array of objects containing { name, error }.
  */
@@ -23,7 +40,9 @@ async function sendHealthAlert(failures) {
       return;
   }
 
-  const failureList = failures.map(f => `<li><b>${f.name}</b>: ${f.error}</li>`).join('');
+  // All failure data is pre-sanitized in health-check.js, 
+  // but we enforce it here as a secondary defensive layer.
+  const failureList = failures.map(f => `<li><b>${escapeHTML(f.name)}</b>: ${escapeHTML(f.error)}</li>`).join('');
   
   const mailOptions = {
     from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
@@ -58,14 +77,17 @@ async function sendHealthAlert(failures) {
 async function sendFallbackAlert(providerName, error) {
   if (!process.env.NOTIFICATION_EMAIL) return;
 
+  const sanitizedProvider = escapeHTML(providerName);
+  const sanitizedError = escapeHTML(error);
+
   const mailOptions = {
     from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
     to: process.env.NOTIFICATION_EMAIL,
-    subject: `⚠️ Gold Scraper Fallback: ${providerName}`,
+    subject: `⚠️ Gold Scraper Fallback: ${sanitizedProvider}`,
     html: `
       <h2>Primary Source Failure - Fallback Utilized</h2>
-      <p>The scraper for <b>${providerName}</b> failed to reach its primary direct source.</p>
-      <p><b>Primary Error:</b> ${error}</p>
+      <p>The scraper for <b>${sanitizedProvider}</b> failed to reach its primary direct source.</p>
+      <p><b>Primary Error:</b> ${sanitizedError}</p>
       <p>✅ <b>Action Taken:</b> The system successfully retrieved market data using the aggregator fail-safe.</p>
       <p>No immediate action is required, but you may want to check if the primary URL or website structure has changed.</p>
       <br/>
@@ -82,4 +104,4 @@ async function sendFallbackAlert(providerName, error) {
   }
 }
 
-module.exports = { sendHealthAlert, sendFallbackAlert };
+module.exports = { sendHealthAlert, sendFallbackAlert, escapeHTML };
