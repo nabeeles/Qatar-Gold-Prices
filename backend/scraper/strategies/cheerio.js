@@ -25,26 +25,30 @@ async function scrapeWithCheerio(provider) {
 
     /**
      * Heuristic Engine: Finds numeric price values associated with a karat label.
-     * 
-     * Refined Logic:
-     * - Requires decimal places (e.g. 552.50) to distinguish prices from store counts or years.
-     * - Validates against realistic market range (>100 and <2000).
      */
     const findPrice = (karatLabel) => {
         let price = null;
         
-        // Strategy A: DOM Proximity Search
+        // Strategy A: Targeted DOM Search
+        // We look for the label and then find the *next* numeric value in the same context
         $(`*:contains("${karatLabel}")`).each((i, el) => {
             if (price) return;
-            const text = $(el).text();
-            // Regex targets values with decimals (e.g., 250.50 or 2,500.00)
-            const numbers = text.match(/(\d{3,}(?:\.\d+))/g);
-            if (numbers) {
-                const found = numbers.find(n => {
-                    const val = parseFloat(n.replace(/,/g, ''));
-                    return val > 100 && val < 2000;
-                });
-                if (found) price = found.replace(/,/g, '');
+            
+            // Get text from the element or its parent (wider context)
+            const contextText = $(el).parent().text() || $(el).text();
+            
+            // Capture decimal prices after the label
+            const labelIndex = contextText.indexOf(karatLabel);
+            if (labelIndex !== -1) {
+                const searchArea = contextText.substring(labelIndex, labelIndex + 150);
+                const matches = searchArea.match(/(\d{2,3}\.\d{2})/g);
+                if (matches) {
+                    const found = matches.find(n => {
+                        const val = parseFloat(n);
+                        return val > 100 && val < 2000;
+                    });
+                    if (found) price = found;
+                }
             }
         });
 
@@ -53,13 +57,13 @@ async function scrapeWithCheerio(provider) {
             const index = bodyText.indexOf(karatLabel);
             if (index !== -1) {
                 const afterText = bodyText.substring(index, index + 200);
-                const matches = afterText.match(/(\d{3,}(?:\.\d+))/g);
+                const matches = afterText.match(/(\d{2,3}\.\d{2})/g);
                 if (matches) {
                     const found = matches.find(n => {
-                        const val = parseFloat(n.replace(/,/g, ''));
+                        const val = parseFloat(n);
                         return val > 100 && val < 2000;
                     });
-                    if (found) price = found.replace(/,/g, '');
+                    if (found) price = found;
                 }
             }
         }
@@ -67,8 +71,20 @@ async function scrapeWithCheerio(provider) {
         return price;
     };
 
-    if (provider.selectors['24k']) results['24k'] = findPrice(provider.selectors['24k']);
-    if (provider.selectors['22k']) results['22k'] = findPrice(provider.selectors['22k']);
+    // Specific mapping for goldpriceqatar.com if URL matches
+    if (provider.url.includes('goldpriceqatar.com')) {
+        const text = $('body').text();
+        // The main rate is usually in a clear sentence: "24 Karat Gold is QAR 552.50"
+        const match24 = text.match(/24 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/24K.*?QAR\s*(\d+\.\d+)/i);
+        const match22 = text.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/22K.*?QAR\s*(\d+\.\d+)/i);
+        
+        if (match24) results['24k'] = match24[1];
+        if (match22) results['22k'] = match22[1];
+    }
+
+    // Fallback to heuristic if specific mapping failed
+    if (!results['24k']) results['24k'] = findPrice('24K') || findPrice('24 KT');
+    if (!results['22k']) results['22k'] = findPrice('22K') || findPrice('22 KT');
 
     return results;
   } catch (error) {
