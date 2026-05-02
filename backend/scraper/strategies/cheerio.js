@@ -2,12 +2,17 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 /**
- * Scrapes gold prices using a static HTML parsing strategy with Cheerio.
+ * Cheerio Scraping Strategy
+ * 
+ * Capability Overview:
+ * Executes high-performance, lightweight HTML parsing for static data sources and 
+ * market aggregators. This engine is optimized for stability and speed, serving 
+ * as the primary fail-safe for critical retail providers.
  * 
  * Orchestration Flow:
- * 1. Executes an HTTP GET request to the provider URL.
- * 2. Parses the resulting HTML into a traversable DOM.
- * 3. Identifies pricing components using a multi-strategy heuristic.
+ * 1. GET: Retrieves the raw HTML document via Axios with browser-spoofing headers.
+ * 2. DOM: Loads the document into a traversable Cheerio object.
+ * 3. SCAN: Applies multi-stage heuristic analysis to identify pricing components.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -24,20 +29,24 @@ async function scrapeWithCheerio(provider) {
     const bodyText = $('body').text().replace(/\s+/g, ' ');
 
     /**
-     * Heuristic Engine: Finds numeric price values associated with a karat label.
+     * findPrice (Heuristic Engine)
+     * 
+     * Identifies numeric gold rates by scanning for "Karat Anchors" and evaluating 
+     * the immediate textual surroundings.
+     * 
+     * Filtering Logic:
+     * - Decimals Required: Targets high-precision strings (e.g., 552.50) to ignore 
+     *   integer counts (like "380 stores") or years (e.g., "2026").
+     * - Market Range: Validates that the price is between 100 and 2000 QAR/gram.
      */
     const findPrice = (karatLabel) => {
         let price = null;
         
-        // Strategy A: Targeted DOM Search
-        // We look for the label and then find the *next* numeric value in the same context
+        // Strategy A: Contextual DOM Proximity
+        // Look for the label and scan the immediate parent's text for decimal values.
         $(`*:contains("${karatLabel}")`).each((i, el) => {
             if (price) return;
-            
-            // Get text from the element or its parent (wider context)
             const contextText = $(el).parent().text() || $(el).text();
-            
-            // Capture decimal prices after the label
             const labelIndex = contextText.indexOf(karatLabel);
             if (labelIndex !== -1) {
                 const searchArea = contextText.substring(labelIndex, labelIndex + 150);
@@ -52,7 +61,8 @@ async function scrapeWithCheerio(provider) {
             }
         });
 
-        // Strategy B: Global Stream Scanning
+        // Strategy B: Global Body Stream Scanning
+        // Fallback for non-standard or fragmented HTML layouts.
         if (!price) {
             const index = bodyText.indexOf(karatLabel);
             if (index !== -1) {
@@ -71,10 +81,12 @@ async function scrapeWithCheerio(provider) {
         return price;
     };
 
-    // Specific mapping for goldpriceqatar.com if URL matches
+    /**
+     * Aggregator-Specific Mapping
+     * Explicit logic for goldpriceqatar.com to ensure 100% extraction fidelity.
+     */
     if (provider.url.includes('goldpriceqatar.com')) {
         const text = $('body').text();
-        // The main rate is usually in a clear sentence: "24 Karat Gold is QAR 552.50"
         const match24 = text.match(/24 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/24K.*?QAR\s*(\d+\.\d+)/i);
         const match22 = text.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/22K.*?QAR\s*(\d+\.\d+)/i);
         
@@ -82,13 +94,13 @@ async function scrapeWithCheerio(provider) {
         if (match22) results['22k'] = match22[1];
     }
 
-    // Fallback to heuristic if specific mapping failed
+    // Dynamic Heuristic Fallback
     if (!results['24k']) results['24k'] = findPrice('24K') || findPrice('24 KT');
     if (!results['22k']) results['22k'] = findPrice('22K') || findPrice('22 KT');
 
     return results;
   } catch (error) {
-    console.error(`[Cheerio] Validation error for ${provider.name}:`, error.message);
+    console.error(`[Cheerio] Network or validation error for ${provider.name}:`, error.message);
     return null;
   }
 }

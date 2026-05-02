@@ -1,7 +1,12 @@
 import * as SQLite from 'expo-sqlite';
 
 /**
- * Interface representing a gold purchase entry in the Digital Vault.
+ * VaultEntry Interface
+ * 
+ * Represents a single gold asset record within the local private vault.
+ * 
+ * Security Note: These records are stored EXCLUSIVELY in the application's local 
+ * SQLite sandbox and are never transmitted to external cloud services (Supabase or otherwise).
  */
 export interface VaultEntry {
   id: string;
@@ -16,8 +21,13 @@ export interface VaultEntry {
 export const DATABASE_NAME = 'vault.db';
 
 /**
- * Modern initialization function for expo-sqlite/next.
- * This runs when the SQLiteProvider starts.
+ * onDatabaseInit
+ * 
+ * Orchestrates the lifecycle of the local database schema. 
+ * Runs synchronously on application mount via SQLiteProvider.
+ * 
+ * Optimization: Uses WAL (Write-Ahead Logging) mode for enhanced performance 
+ * during rapid portfolio updates.
  */
 export async function onDatabaseInit(db: SQLite.SQLiteDatabase) {
   try {
@@ -33,17 +43,22 @@ export async function onDatabaseInit(db: SQLite.SQLiteDatabase) {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log('Database initialized successfully');
+    console.log('[LocalDB] Private vault schema initialized successfully.');
   } catch (error) {
-    console.error('Failed to initialize database schema:', error);
+    console.error('[LocalDB] Critical failure during schema initialization:', error);
   }
 }
 
 /**
- * Database access service for the Digital Vault.
- * Methods use the DB instance provided by the caller or hook.
+ * dbService
+ * 
+ * Provides an asynchronous abstraction layer for all local gold asset operations.
+ * Implements standard CRUD patterns to maintain data sovereignty.
  */
 export const dbService = {
+  /**
+   * Adds a new gold asset to the local vault.
+   */
   async addEntry(db: SQLite.SQLiteDatabase, entry: Omit<VaultEntry, 'created_at'>) {
     await db.runAsync(
       'INSERT INTO vault_entries (id, label, karat, weight, price_per_gram, purchase_date) VALUES (?, ?, ?, ?, ?, ?)',
@@ -51,10 +66,16 @@ export const dbService = {
     );
   },
 
+  /**
+   * Retrieves the entire portfolio, sorted by purchase date (descending).
+   */
   async getEntries(db: SQLite.SQLiteDatabase): Promise<VaultEntry[]> {
     return await db.getAllAsync<VaultEntry>('SELECT * FROM vault_entries ORDER BY purchase_date DESC');
   },
 
+  /**
+   * Permanently removes an asset from the local vault.
+   */
   async deleteEntry(db: SQLite.SQLiteDatabase, id: string) {
     await db.runAsync('DELETE FROM vault_entries WHERE id = ?', [id]);
   }

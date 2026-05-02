@@ -5,7 +5,18 @@ const { checkAndSendAlerts } = require('./utils/alerts');
 const { sendFallbackAlert } = require('./utils/mailer');
 
 /**
- * Main scraper entry point.
+ * Scraper Orchestrator (index.js)
+ * 
+ * Capability Overview:
+ * Executes the global market synchronization lifecycle. Manages dynamic engine 
+ * dispatching, data persistence, and intelligent fail-over for critical providers.
+ * 
+ * Orchestration Flow:
+ * 1. SYNC: Retrieves the active provider registry from Supabase.
+ * 2. DISPATCH: Routes tasks to Puppeteer (Direct) or Cheerio (Aggregator) based on metadata.
+ * 3. FAIL-SAFE: Executes a "Primary-with-Fallback" pivot for high-impact sources.
+ * 4. LEDGER: Persists validated market rates into the historical ledger.
+ * 5. ALERT: Aggregates spot averages and triggers user threshold notifications.
  */
 async function runScraper() {
   console.log('--- Starting Qatar Gold Price Scraper ---');
@@ -23,7 +34,8 @@ async function runScraper() {
         let usedFallback = false;
         let primaryError = null;
 
-        // --- STRATEGY: Primary Extraction ---
+        // --- PHASE 1: Primary Extraction ---
+        // Attempts the optimized strategy defined in the provider's scraping_type field.
         try {
             const primaryStrategy = provider.scraping_type === 'aggregator' ? scrapeWithCheerio : scrapeWithPuppeteer;
             prices = await primaryStrategy(provider);
@@ -32,8 +44,8 @@ async function runScraper() {
             console.error(`   ❌ Primary strategy failed for ${provider.name}: ${primaryError}`);
         }
 
-        // --- STRATEGY: Intelligent Fallback (Critical Vendors Only) ---
-        // Trigger fallback if primary failed, returned nothing, or only returned partial data
+        // --- PHASE 2: Intelligent Fallback (Critical Vendors) ---
+        // If the primary source is unreachable or returns partial data, pivot to the aggregator fail-safe.
         const isPartial = prices && (!prices['24k'] || !prices['22k']);
         if ((!prices || Object.keys(prices).length === 0 || isPartial) && provider.name.includes('Malabar')) {
             console.warn(`   ⚠️  Primary extraction for ${provider.name} was ${prices ? 'partial' : 'failed'}. Attempting aggregator fallback...`);
@@ -46,12 +58,13 @@ async function runScraper() {
             const fallbackPrices = await scrapeWithCheerio(fallbackProvider);
             
             if (fallbackPrices && Object.keys(fallbackPrices).length > 0) {
-                // Merge/Overwrite with fallback data
+                // Merge/Overwrite with stable fallback data to ensure system continuity.
                 prices = { ...prices, ...fallbackPrices };
                 await sendFallbackAlert(provider.name, primaryError || 'Navigation timeout / Incomplete data');
             }
         }
 
+        // --- PHASE 3: Ledger Persistence ---
         if (prices && Object.keys(prices).some(k => k.match(/\d+k/i) && prices[k])) {
           console.log(`✅ Extracted prices for ${provider.name}:`, prices);
           await savePrices(provider.id, prices);
@@ -72,11 +85,11 @@ async function runScraper() {
       }
     }
 
-    // After all providers are scraped, check alerts using the averages
+    // --- PHASE 4: Alert Evaluation ---
+    // Aggregates market movements and dispatches mobile push notifications.
     if (allScrapedPrices.length > 0) {
         console.log('--- Commencing Market Threshold Validation ---');
         
-        // Calculate spot averages across all successful extractions
         const dailyMap = {};
         allScrapedPrices.forEach(item => {
             if (!dailyMap[item.karat]) dailyMap[item.karat] = { total: 0, count: 0 };
@@ -84,7 +97,7 @@ async function runScraper() {
             dailyMap[item.karat].count += 1;
         });
 
-        // Convert map to Array format expected by alerts.js: [{ karat: 24, price: 550.50 }]
+        // Convert map to Array format expected by the Notification Engine.
         const latestAverages = Object.keys(dailyMap).map(karat => ({
             karat: parseInt(karat),
             price: dailyMap[karat].total / dailyMap[karat].count
@@ -95,7 +108,7 @@ async function runScraper() {
 
     console.log('--- Scraper Run Finished ---');
   } catch (error) {
-    console.error('CRITICAL ERROR:', error.message);
+    console.error('CRITICAL SYSTEM ERROR:', error.message);
     process.exit(1);
   }
 }

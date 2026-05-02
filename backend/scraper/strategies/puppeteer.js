@@ -1,18 +1,24 @@
 const puppeteer = require('puppeteer');
 
 /**
- * Executes a browser-based scraping strategy using Puppeteer to extract real-time gold market data.
+ * Puppeteer Scraping Strategy
  * 
  * Capability Overview:
- * - Orchestrates a Chromium instance in headless mode.
- * - Manages complex, stateful interactions (country selection, AJAX form submissions).
- * - Implements robust heuristic data extraction using DOM traversal and regex matching.
+ * Orchestrates a Chromium instance in headless mode to handle dynamic, 
+ * stateful, or heavily hydrated retail websites. This engine is the primary 
+ * choice for providers requiring regional selection or DOM-resident price tables.
+ * 
+ * Interaction Lifecycle:
+ * 1. LAUNCH: Starts a sandboxed browser instance with no-sandbox flags for CI safety.
+ * 2. NAVIGATE: Visits the secure endpoint with custom User-Agent and viewport.
+ * 3. HYDRATE: Implements provider-specific wait periods for AJAX/React mounting.
+ * 4. EXTRACT: Executes in-browser JS to parse structured DOM elements.
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
   const browser = await puppeteer.launch({ 
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'] // Security: Required for many CI environments including GitHub Actions.
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   try {
@@ -22,22 +28,21 @@ async function scrapeWithPuppeteer(provider) {
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
-    // Use 'load' event for better stability with Malabar's hybrid hydration
+    // Malabar's new stores page requires 'load' event for the pricing table to appear reliably
     const navEvent = provider.name.includes('Malabar') ? 'load' : 'domcontentloaded';
     
     try {
         await page.goto(provider.url, { waitUntil: navEvent, timeout: 60000 });
         if (provider.name.includes('Malabar')) {
-            // New Malabar page takes a few seconds to hydrate the price table
+            // Explicit debounce for table hydration
             await new Promise(r => setTimeout(r, 10000));
         }
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation event '${navEvent}' timed out, attempting extraction anyway...`);
     }
     
-    // --- 1. Provider-Specific Hydration & Interaction ---
+    // --- Provider-Specific Stabilization ---
     if (provider.name.includes('Shine')) {
-        // Shine requires a significant stabilization period for their pricing table to mount.
         await new Promise(r => setTimeout(r, 10000));
     }
 
@@ -45,23 +50,21 @@ async function scrapeWithPuppeteer(provider) {
         const res = {};
         
         /**
-         * Cleanses raw string data into a standard numeric format for persistence.
-         * @param {string} text - Raw innerText from a DOM node.
+         * Cleanses raw string data into a standard numeric format.
          */
         const cleanPrice = (text) => {
             if (!text) return null;
-            // Matches numeric components with optional decimals, excluding years like 2026
             const match = text.match(/(\d{2,3}(?:\.\d+)?)/);
             return match ? match[1].replace(/,/g, '') : null;
         };
 
-        // --- STRATEGY: Malabar Gold (Table Row Detection) ---
+        // --- STRATEGY: Malabar Gold (Table Row Extraction) ---
+        // New structure targets the Qatar-specific row in the global rates table.
         if (pName.includes('Malabar')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             const qatarRow = rows.find(r => r.innerText.includes('Qatar') && r.innerText.includes('QAR'));
             if (qatarRow) {
                 const cells = Array.from(qatarRow.querySelectorAll('td'));
-                // Expected format: [Country, 22K Price, 24K Price, Update Time]
                 if (cells.length >= 3) {
                     res['22k'] = cleanPrice(cells[1].innerText);
                     res['24k'] = cleanPrice(cells[2].innerText);
@@ -70,7 +73,7 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: Shine Jewelers (Table Column Mapping) ---
+        // --- STRATEGY: Shine Jewelers (Tabular Index Mapping) ---
         if (pName.includes('Shine')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             const headerRow = rows.find(r => r.innerText.includes('24ct') && r.innerText.includes('22ct'));
@@ -90,49 +93,10 @@ async function scrapeWithPuppeteer(provider) {
                     else if (text.includes('18ct')) res['18k'] = p;
                 });
             }
-            
-            // Failover: Recursive label search if table structure is non-standard
-            if (Object.keys(res).length === 0) {
-                const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
-                const findByLabel = (label) => {
-                    for (const el of all) {
-                        if (el.innerText && el.innerText.toLowerCase().includes(label)) {
-                            const next = el.nextElementSibling?.innerText || el.parentElement?.nextElementSibling?.innerText;
-                            const p = cleanPrice(next);
-                            if (p) return p;
-                        }
-                    }
-                    return null;
-                };
-                res['24k'] = findByLabel('24ct');
-                res['22k'] = findByLabel('22ct');
-                res['21k'] = findByLabel('21ct');
-                res['18k'] = findByLabel('18ct');
-            }
             return res;
         }
 
-        // --- STRATEGY: Al Fardan (Label-based extraction) ---
-        if (pName.includes('Fardan')) {
-            const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
-            const findGeneric = (label) => {
-                for (const el of all) {
-                    if (el.innerText && el.innerText.toUpperCase().includes(label)) {
-                        const text = el.parentElement ? el.parentElement.innerText : el.innerText;
-                        const p = cleanPrice(text);
-                        if (p) return p;
-                    }
-                }
-                return null;
-            };
-            res['24k'] = findGeneric('24 KARAT') || findGeneric('24K');
-            res['22k'] = findGeneric('22 KARAT') || findGeneric('22K');
-            res['21k'] = findGeneric('21 KARAT') || findGeneric('21K');
-            res['18k'] = findGeneric('18 KARAT') || findGeneric('18K');
-            return res;
-        }
-
-        // --- GENERIC FALLBACK (Heuristic search for remaining vendors) ---
+        // --- STRATEGY: Heuristic Fallback (Label Anchoring) ---
         const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
         const findGeneric = (label) => {
             for (const el of all) {
@@ -155,7 +119,7 @@ async function scrapeWithPuppeteer(provider) {
     return prices;
 
   } catch (err) {
-    console.error(`   [Error] Market synchronization failure: ${err.message}`);
+    console.error(`   [Puppeteer] Critical synchronization failure: ${err.message}`);
     return null;
   } finally {
     await browser.close();

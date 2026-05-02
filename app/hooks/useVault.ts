@@ -5,32 +5,42 @@ import { useSQLiteContext } from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
 
 /**
- * Custom hook to manage the Digital Vault state and business logic.
+ * useVault Hook
  * 
- * Capability:
- * - Synchronizes with the local SQLite database via context.
- * - Computes real-time portfolio valuation using market averages.
- * - Provides CRUD operations with automatic UI updates (via React Query).
+ * Centralized business logic engine for the "My Gold" feature.
+ * 
+ * Responsibilities:
+ * 1. Data Sync: Bridges the local SQLite vault with the global React Query state.
+ * 2. Market Analysis: Calculates real-time spot averages per karat from Supabase data.
+ * 3. Valuation: Maps local holdings to current market rates to derive ROI and Total Value.
+ * 4. CRUD: Provides reactive methods to manage asset lifecycle.
  */
 export function useVault() {
   const db = useSQLiteContext();
   const queryClient = useQueryClient();
   const { data: latestPrices } = useLatestPrices();
 
-  // Fetch all entries from the local database
+  /**
+   * entriesQuery
+   * Retrieves the current user portfolio from the device-local SQLite database.
+   */
   const entriesQuery = useQuery({
     queryKey: ['vault-entries'],
     queryFn: async () => {
       try {
         return await dbService.getEntries(db);
       } catch (err) {
-        console.error('useVault entries fetch failed:', err);
+        console.error('[VaultHook] Local entries fetch failed:', err);
         return [];
       }
     },
   });
 
-  // Calculate market averages per karat from the latest scraped prices
+  /**
+   * marketAverages (Computed)
+   * Aggregates the latest market data into a lookup map for instant valuation.
+   * Format: { [karat]: { total, count } }
+   */
   const marketAverages = (latestPrices || []).reduce((acc, curr) => {
     if (!acc[curr.karat]) {
       acc[curr.karat] = { total: 0, count: 0 };
@@ -40,12 +50,20 @@ export function useVault() {
     return acc;
   }, {} as Record<number, { total: number; count: number }>);
 
+  /**
+   * getAveragePrice
+   * Utility to retrieve the mathematical mean for a specific gold purity.
+   */
   const getAveragePrice = (karat: number) => {
     const data = marketAverages[karat];
     return data ? data.total / data.count : 0;
   };
 
-  // Compute portfolio metrics
+  /**
+   * portfolioSummary (Computed)
+   * Iterates through local holdings and applies current market averages 
+   * to calculate global ROI and cost-basis metrics.
+   */
   const portfolioSummary = (entriesQuery.data || []).reduce(
     (acc, entry) => {
       const currentPrice = getAveragePrice(entry.karat);
@@ -64,7 +82,12 @@ export function useVault() {
     ? (totalGainLoss / portfolioSummary.totalCostBasis) * 100 
     : 0;
 
-  // Mutations for CRUD
+  // --- Mutations ---
+
+  /**
+   * addEntry
+   * Persists a new gold asset to the local database with a secure random UUID.
+   */
   const addMutation = useMutation({
     mutationFn: async (entry: Omit<VaultEntry, 'id' | 'created_at'>) => {
       return await dbService.addEntry(db, {
@@ -75,6 +98,10 @@ export function useVault() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['vault-entries'] }),
   });
 
+  /**
+   * deleteEntry
+   * Removes an asset and triggers a reactive UI refresh.
+   */
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return await dbService.deleteEntry(db, id);

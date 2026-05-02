@@ -1,75 +1,53 @@
 # 💰 Qatar Gold Prices
 
-A full-stack mobile application to track real-time gold prices in Qatar from multiple local providers.
+A premium, privacy-first mobile application to track real-time gold market data in Qatar and manage your personal holdings securely.
 
 ---
 
 ## ✨ Features
 
-- **📍 Multiple Providers:** Scraping prices directly from Al Fardan Exchange, Malabar Gold, Joyalukkas, and more.
-- **🕒 Real-time Updates:** Stay updated with the latest 24K, 22K, 21K, and 18K gold rates per gram in QAR.
-- **📈 My Gold Portfolio:** Private, local-only tracker to record your gold assets with a keyboard-optimized "Safe-Entry" form.
-- **📊 Historical Trends:** Interactive charts showing gold price fluctuations over time for all karats.
-- **🔔 Price Alerts:** Set custom targets for when the gold price drops or rises above your specified value.
-- **📱 Native Mobile Experience:** Built with Expo and React Native for a smooth, high-performance UI.
+- **📍 Resilient Scraping:** Dual-engine architecture (Puppeteer & Cheerio) with a **Direct-with-Fallback** safety net for critical providers like Malabar Gold.
+- **🛡️ Privacy-First Portfolio:** A secure, **Local-Only** vault to track your gold assets (Weight, Karat, Purchase Price). Your data never leaves your device.
+- **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 5 reliable local sources.
+- **📈 Performance Analytics:** Instant ROI and profit/loss calculation based on live market averages.
+- **⚡ Smart-Sync Entry:** Intelligent bi-directional calculation between "Total Price" and "Price per Gram."
+- **🔔 Proactive Alerts:** Custom target notifications and automated system health emails for administrators.
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Framework:** [Expo](https://expo.dev/) (React Native)
-- **Local Storage:** [Expo SQLite](https://docs.expo.dev/versions/latest/sdk/sqlite/)
-- **State Management:** [React Query](https://tanstack.com/query/latest)
-- **Styling:** [NativeWind](https://www.nativewind.dev/) (Tailwind CSS for React Native)
-- **Charts:** [React Native Wagmi Charts](https://github.com/coinjar/react-native-wagmi-charts)
+### Mobile Frontend
+- **Framework:** [Expo 54](https://expo.dev/) (React Native)
+- **Local Database:** [Expo SQLite](https://docs.expo.dev/versions/latest/sdk/sqlite/) (Secure Sandbox)
+- **State Engine:** [React Query v5](https://tanstack.com/query/latest)
+- **Styling:** [NativeWind v4](https://www.nativewind.dev/) (Tailwind CSS)
 
-### Backend
-- **Database:** [Supabase](https://supabase.com/) (PostgreSQL)
-- **Scraper:** [Node.js](https://nodejs.org/) + [Puppeteer](https://pptr.dev/)
-- **Infrastructure:** [GitHub Actions](https://github.com/features/actions) (Scheduled CRON Scraping)
-- **Push Notifications:** [Expo SDK](https://docs.expo.dev/push-notifications/overview/)
+### Backend & Infrastructure
+- **Cloud Database:** [Supabase](https://supabase.com/) (PostgreSQL with RLS)
+- **Automation:** [GitHub Actions](https://github.com/features/actions) (Hourly Scraper & Daily Health Check)
+- **Communications:** [Nodemailer](https://nodemailer.com/) (SMTP Alerts) & [Expo Push SDK](https://docs.expo.dev/push-notifications/overview/)
 
 ---
 
-## 🚀 Quick Start
+## 📂 Documentation
 
-### 1. Repository Setup
+- **[Architecture Overview](docs/ARCHITECTURE.md):** The robust system design and data sovereignty model.
+- **[Scraping Strategy](docs/SCRAPING.md):** Detailed heuristics and aggregator fail-safe logic.
+- **[Setup & Deployment](docs/SETUP.md):** Instructions for local EAS builds and environment injection.
+- **[Security Audit](docs/SECURITY_AUDIT.md):** Remediated findings and dependency hardening report.
+
+---
+
+## 🚀 Development Note
+
+Production builds are performed locally using **EAS Local** to ensure maximum stability.
 ```bash
-git clone https://github.com/your-username/qatar-gold-prices.git
-cd qatar-gold-prices
+# Manual environment injection is required for local builds
+export EXPO_PUBLIC_SUPABASE_URL="your_url"
+export EXPO_PUBLIC_SUPABASE_ANON_KEY="your_key"
+npx eas build --local -p android --profile production
 ```
-
-### 2. Backend & Scraper Setup
-Detailed instructions can be found in [docs/SETUP.md](docs/SETUP.md).
-
-### 3. Mobile App Setup
-Detailed instructions can be found in [docs/SETUP.md](docs/SETUP.md).
-
----
-
-## 📂 Project Structure
-
-```bash
-├── app/              # React Native Mobile Application (Expo)
-├── backend/          # Node.js Scraper and Supabase configurations
-├── conductor/        # Project planning and My Gold feature design
-├── docs/             # Technical Documentation & Security Audits
-├── scripts/          # Administrative and provisioning tools
-└── .github/          # GitHub Actions (Scraper Automation)
-```
-
----
-
-## 📄 Documentation
-
-For more detailed information, please refer to the following guides:
-
-- **[Architecture Overview](docs/ARCHITECTURE.md):** High-level system design and data flow.
-- **[My Gold Product Design](conductor/my-gold-product.md):** Vision and user stories for the portfolio tracker.
-- **[Scraping Strategies](docs/SCRAPING.md):** How we extract data from various vendors.
-- **[API & Schema](docs/API.md):** Database structure and data access patterns.
-- **[Setup Guide](docs/SETUP.md):** Local development and deployment instructions.
 
 ---
 
