@@ -25,7 +25,10 @@ async function scrapeWithCheerio(provider) {
 
     /**
      * Heuristic Engine: Finds numeric price values associated with a karat label.
-     * Skips values that look like years (e.g., 2026) to ensure accuracy.
+     * 
+     * Refined Logic:
+     * - Requires decimal places (e.g. 552.50) to distinguish prices from store counts or years.
+     * - Validates against realistic market range (>100 and <2000).
      */
     const findPrice = (karatLabel) => {
         let price = null;
@@ -34,29 +37,29 @@ async function scrapeWithCheerio(provider) {
         $(`*:contains("${karatLabel}")`).each((i, el) => {
             if (price) return;
             const text = $(el).text();
-            // Match numbers that are likely gold prices (e.g. 250.50) and not years (2024-2030)
-            const numbers = text.match(/(\d{3,}(?:\.\d+)?)/g);
+            // Regex targets values with decimals (e.g., 250.50 or 2,500.00)
+            const numbers = text.match(/(\d{3,}(?:\.\d+))/g);
             if (numbers) {
                 const found = numbers.find(n => {
-                    const val = parseFloat(n);
-                    return val > 100 && val < 2000; // Realistic price range for 1g of gold
+                    const val = parseFloat(n.replace(/,/g, ''));
+                    return val > 100 && val < 2000;
                 });
-                if (found) price = found;
+                if (found) price = found.replace(/,/g, '');
             }
         });
 
-        // Strategy B: Global Stream Scanning (Next logical number)
+        // Strategy B: Global Stream Scanning
         if (!price) {
             const index = bodyText.indexOf(karatLabel);
             if (index !== -1) {
                 const afterText = bodyText.substring(index, index + 200);
-                const matches = afterText.match(/(\d{3,}(?:\.\d+)?)/g);
+                const matches = afterText.match(/(\d{3,}(?:\.\d+))/g);
                 if (matches) {
                     const found = matches.find(n => {
-                        const val = parseFloat(n);
+                        const val = parseFloat(n.replace(/,/g, ''));
                         return val > 100 && val < 2000;
                     });
-                    if (found) price = found;
+                    if (found) price = found.replace(/,/g, '');
                 }
             }
         }
