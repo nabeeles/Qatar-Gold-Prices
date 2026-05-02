@@ -29,22 +29,26 @@ async function runScraper() {
             prices = await primaryStrategy(provider);
         } catch (err) {
             primaryError = err.message;
+            console.error(`   ❌ Primary strategy failed for ${provider.name}: ${primaryError}`);
         }
 
         // --- STRATEGY: Intelligent Fallback (Critical Vendors Only) ---
-        if ((!prices || Object.keys(prices).length === 0) && provider.name.includes('Malabar')) {
-            console.warn(`   ⚠️  Primary extraction for ${provider.name} failed. Attempting aggregator fallback...`);
+        // Trigger fallback if primary failed, returned nothing, or only returned partial data
+        const isPartial = prices && (!prices['24k'] || !prices['22k']);
+        if ((!prices || Object.keys(prices).length === 0 || isPartial) && provider.name.includes('Malabar')) {
+            console.warn(`   ⚠️  Primary extraction for ${provider.name} was ${prices ? 'partial' : 'failed'}. Attempting aggregator fallback...`);
             usedFallback = true;
             const fallbackProvider = {
                 ...provider,
                 url: 'https://goldpriceqatar.com/',
                 selectors: { '24k': '24K', '22k': '22K' }
             };
-            prices = await scrapeWithCheerio(fallbackProvider);
+            const fallbackPrices = await scrapeWithCheerio(fallbackProvider);
             
-            // Inform admin that fail-safe was used
-            if (prices && Object.keys(prices).length > 0) {
-                await sendFallbackAlert(provider.name, primaryError || 'Navigation timeout / Empty result');
+            if (fallbackPrices && Object.keys(fallbackPrices).length > 0) {
+                // Merge/Overwrite with fallback data
+                prices = { ...prices, ...fallbackPrices };
+                await sendFallbackAlert(provider.name, primaryError || 'Navigation timeout / Incomplete data');
             }
         }
 
