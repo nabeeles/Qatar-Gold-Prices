@@ -54,18 +54,14 @@ async function scrapeWithPuppeteer(provider) {
 
     const prices = await page.evaluate((pName) => {
         const res = {};
+        const bodyText = document.body.innerText.replace(/\s+/g, ' ');
         
         /**
          * Cleanses raw string data into a standard numeric format.
-         * 
-         * Robustness:
-         * - Handles spaces around decimals (e.g., "556 . 00").
-         * - Requires decimal places to distinguish prices from karat labels (24, 22).
-         * - Filters for realistic market range.
          */
         const cleanPrice = (text) => {
             if (!text) return null;
-            // Normalize: remove commas and handle spaced decimals
+            // Normalize: remove commas and handle spaced decimals (e.g., "556 . 00")
             const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
             const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
             
@@ -76,8 +72,28 @@ async function scrapeWithPuppeteer(provider) {
             return null;
         };
 
+        /**
+         * findPrice (Heuristic Engine)
+         */
+        const findPrice = (karatLabel, assignedPrices = []) => {
+            const index = bodyText.indexOf(karatLabel);
+            if (index === -1) return null;
+            
+            const searchArea = bodyText.substring(index, index + 200);
+            const matches = searchArea.match(/(\d{3,}(?:\.\d+)?)/g);
+            
+            if (matches) {
+                const found = matches.find(n => {
+                    const cleanN = n.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
+                    const val = parseFloat(cleanN);
+                    return val > 100 && val < 2000 && !assignedPrices.includes(cleanN);
+                });
+                return found ? found.replace(/,/g, '').replace(/\s+\.\s+/g, '.') : null;
+            }
+            return null;
+        };
+
         // --- STRATEGY: Malabar Gold (Table Row Extraction) ---
-        // New structure targets the Qatar-specific row in the global rates table.
         if (pName.includes('Malabar')) {
             const rows = Array.from(document.querySelectorAll('tr'));
             const qatarRow = rows.find(r => r.innerText.includes('Qatar') && r.innerText.includes('QAR'));
@@ -91,45 +107,19 @@ async function scrapeWithPuppeteer(provider) {
             return res;
         }
 
-        // --- STRATEGY: Shine Jewelers (Tabular Index Mapping) ---
-        if (pName.includes('Shine')) {
-            const rows = Array.from(document.querySelectorAll('tr'));
-            const headerRow = rows.find(r => r.innerText.includes('24ct') && r.innerText.includes('22ct'));
-            const priceRow = rows.find(r => r.innerText.includes('QAR'));
-
-            if (headerRow && priceRow) {
-                const headers = Array.from(headerRow.querySelectorAll('th, td'));
-                const pricesCells = Array.from(priceRow.querySelectorAll('th, td'));
-                
-                headers.forEach((h, i) => {
-                    const text = h.innerText.toLowerCase();
-                    const p = cleanPrice(pricesCells[i]?.innerText);
-                    if (!p) return;
-                    if (text.includes('24ct')) res['24k'] = p;
-                    else if (text.includes('22ct')) res['22k'] = p;
-                    else if (text.includes('21ct')) res['21k'] = p;
-                    else if (text.includes('18ct')) res['18k'] = p;
-                });
-            }
-            return res;
-        }
-
-        // --- STRATEGY: Heuristic Fallback (Label Anchoring) ---
-        const all = Array.from(document.querySelectorAll('*')).filter(el => !el.children || el.children.length === 0);
-        const findGeneric = (label) => {
-            for (const el of all) {
-                if (el.innerText && el.innerText.toUpperCase().includes(label)) {
-                    const text = el.parentElement ? el.parentElement.innerText : el.innerText;
-                    const p = cleanPrice(text);
-                    if (p) return p;
-                }
-            }
-            return null;
-        };
-        res['24k'] = findGeneric('24K') || findGeneric('24 KARAT');
-        res['22k'] = findGeneric('22K') || findGeneric('22 KARAT');
-        res['21k'] = findGeneric('21K') || findGeneric('21 KARAT');
-        res['18k'] = findGeneric('18K') || findGeneric('18 KARAT');
+        // --- STRATEGY: Dynamic Heuristic (Joyalukkas, Shine, etc.) ---
+        const used = [];
+        const k24 = findPrice('24K', used) || findPrice('24KT', used) || findPrice('24 Karat', used);
+        if (k24) { res['24k'] = k24; used.push(k24); }
+        
+        const k22 = findPrice('22K', used) || findPrice('22KT', used) || findPrice('22 Karat', used);
+        if (k22) { res['22k'] = k22; used.push(k22); }
+        
+        const k21 = findPrice('21K', used) || findPrice('21KT', used) || findPrice('21 Karat', used);
+        if (k21) { res['21k'] = k21; used.push(k21); }
+        
+        const k18 = findPrice('18K', used) || findPrice('18KT', used) || findPrice('18 Karat', used);
+        if (k18) { res['18k'] = k18; }
 
         return res;
     }, provider.name);
