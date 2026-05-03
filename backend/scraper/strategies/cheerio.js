@@ -25,28 +25,23 @@ async function scrapeWithCheerio(provider) {
 
     /**
      * findPrice (Heuristic Engine)
-     * 
-     * Robustness:
-     * - Uses "Ranged Anchoring": Searches for the price between the current karat 
-     *   label and the next logical label to prevent cross-contamination.
-     * - Prioritizes market-realistic decimal values.
      */
-    const findPrice = (karatLabel, nextKaratLabel = null) => {
+    const findPrice = (karatLabel, nextKaratLabel = null, assignedPrices = []) => {
         let price = null;
         
-        // Define search boundary to avoid picking up the wrong karat's price
         const startIndex = bodyText.indexOf(karatLabel);
         if (startIndex === -1) return null;
         
-        const endIndex = nextKaratLabel ? bodyText.indexOf(nextKaratLabel, startIndex) : startIndex + 300;
-        const searchArea = bodyText.substring(startIndex, endIndex === -1 ? startIndex + 300 : endIndex);
+        // Search in a narrow 150-char window AFTER the label
+        const windowSize = 150;
+        const searchArea = bodyText.substring(startIndex, startIndex + windowSize);
 
-        // Regex targets values with decimals (e.g., 250.50 or 2,500.00)
         const matches = searchArea.match(/(\d{2,3}\.\d{2})/g) || searchArea.match(/(\d{2,3})/g);
         if (matches) {
+            // Find the first valid price that isn't already assigned to a higher karat
             const found = matches.find(n => {
                 const val = parseFloat(n);
-                return val > 100 && val < 2000;
+                return val > 100 && val < 2000 && !assignedPrices.includes(n);
             });
             if (found) price = found;
         }
@@ -56,29 +51,30 @@ async function scrapeWithCheerio(provider) {
 
     /**
      * Aggregator-Specific Mapping
-     * Explicit logic for goldpriceqatar.com to ensure 100% extraction fidelity.
      */
     if (provider.url.includes('goldpriceqatar.com')) {
         const text = $('body').text();
-        const match24 = text.match(/24 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/24K.*?QAR\s*(\d+\.\d+)/i);
-        const match22 = text.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i) || text.match(/22K.*?QAR\s*(\d+\.\d+)/i);
+        const match24 = text.match(/24 Karat Gold is QAR\s*(\d+\.\d+)/i);
+        const match22 = text.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i);
+        const match18 = text.match(/18 Karat Gold is QAR\s*(\d+\.\d+)/i);
         
         if (match24) results['24k'] = match24[1];
         if (match22) results['22k'] = match22[1];
+        if (match18) results['18k'] = match18[1];
     }
 
-    // Dynamic Ranged Heuristic Fallback
+    // Dynamic Heuristic with Uniqueness check
+    const used = [];
     if (!results['24k']) {
-        results['24k'] = findPrice('24K', '22K') || findPrice('24KT', '22KT') || findPrice('24 Karat', '22 Karat');
+        results['24k'] = findPrice('24K', null, used) || findPrice('24KT', null, used);
+        if (results['24k']) used.push(results['24k']);
     }
     if (!results['22k']) {
-        results['22k'] = findPrice('22K', '21K') || findPrice('22KT', '21KT') || findPrice('22 Karat', '21 Karat');
-    }
-    if (!results['21k']) {
-        results['21k'] = findPrice('21K', '18K') || findPrice('21KT', '18KT') || findPrice('21 Karat', '18 Karat');
+        results['22k'] = findPrice('22K', null, used) || findPrice('22KT', null, used);
+        if (results['22k']) used.push(results['22k']);
     }
     if (!results['18k']) {
-        results['18k'] = findPrice('18K', '14K') || findPrice('18KT', '14KT') || findPrice('18 Karat', '14 Karat');
+        results['18k'] = findPrice('18K', null, used) || findPrice('18KT', null, used);
     }
 
     return results;
