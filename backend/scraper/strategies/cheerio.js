@@ -3,11 +3,6 @@ const cheerio = require('cheerio');
 
 /**
  * Cheerio Scraping Strategy
- * 
- * Capability Overview:
- * Executes high-performance, lightweight HTML parsing for static data sources and 
- * market aggregators. This engine is optimized for stability and speed, serving 
- * as the primary fail-safe for critical retail providers.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -28,55 +23,48 @@ async function scrapeWithCheerio(provider) {
      */
     const findPrice = (karatLabel, assignedPrices = []) => {
         let price = null;
-        
         const startIndex = bodyText.indexOf(karatLabel);
         if (startIndex === -1) return null;
         
-        // Expand search window to 300-char to handle nested layouts in aggregators
         const windowSize = 300;
         const searchArea = bodyText.substring(startIndex, startIndex + windowSize);
 
-        // Regex targets values with decimals
         const matches = searchArea.match(/(\d{3,}\.\d{2})/g) || searchArea.match(/(\d{3,})/g);
         if (matches) {
-            // Find the first valid price that isn't already assigned to a higher karat
             const found = matches.find(n => {
                 const val = parseFloat(n);
-                // Gold price in Qatar is strictly > 300 and < 1000 per gram currently
                 return val > 300 && val < 1000 && !assignedPrices.includes(n);
             });
             if (found) price = found;
         }
-
         return price;
     };
 
     /**
-     * Aggregator-Specific Mapping
+     * Brand-Specific Mapping (Malabar, etc.)
      */
-    if (provider.url.includes('goldpriceqatar.com')) {
-        const text = $('body').text();
-        const match24 = text.match(/24 Karat Gold is QAR\s*(\d+\.\d+)/i);
-        const match22 = text.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i);
-        const match18 = text.match(/18 Karat Gold is QAR\s*(\d+\.\d+)/i);
-        
-        if (match24) results['24k'] = match24[1];
-        if (match22) results['22k'] = match22[1];
-        if (match18) results['18k'] = match18[1];
+    if (provider.name.includes('Malabar')) {
+        const malabarMatch = bodyText.match(/Malabar is\s*(\d+\.\d+)/i);
+        if (malabarMatch) {
+            results['24k'] = malabarMatch[1];
+            // 22k is usually ~92% of 24k, but we'll try to find it in the text
+            const m22 = bodyText.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i);
+            if (m22) results['22k'] = m22[1];
+        }
     }
 
     // Dynamic Heuristic with Uniqueness check
     const used = [];
     if (!results['24k']) {
-        results['24k'] = findPrice('24K', null, used) || findPrice('24KT', null, used);
+        results['24k'] = findPrice('24K', used) || findPrice('24KT', used);
         if (results['24k']) used.push(results['24k']);
     }
     if (!results['22k']) {
-        results['22k'] = findPrice('22K', null, used) || findPrice('22KT', null, used);
+        results['22k'] = findPrice('22K', used) || findPrice('22KT', used);
         if (results['22k']) used.push(results['22k']);
     }
     if (!results['18k']) {
-        results['18k'] = findPrice('18K', null, used) || findPrice('18KT', null, used);
+        results['18k'] = findPrice('18K', used) || findPrice('18KT', used);
     }
 
     return results;
