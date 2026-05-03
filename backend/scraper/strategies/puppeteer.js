@@ -28,17 +28,23 @@ async function scrapeWithPuppeteer(provider) {
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
-    // Malabar's new stores page requires 'load' event for the pricing table to appear reliably
-    const navEvent = provider.name.includes('Malabar') ? 'load' : 'domcontentloaded';
+    // Use 'load' event for better stability with Malabar's hybrid hydration
+    const navEvent = provider.name.includes('Malabar') || provider.name.includes('Shine') ? 'load' : 'domcontentloaded';
     
     try {
-        await page.goto(provider.url, { waitUntil: navEvent, timeout: 60000 });
+        await page.goto(provider.url, { waitUntil: navEvent, timeout: 90000 });
+        
         if (provider.name.includes('Malabar')) {
-            // Explicit debounce for table hydration
-            await new Promise(r => setTimeout(r, 10000));
+            await new Promise(r => setTimeout(r, 15000));
+        } else if (provider.name.includes('Joyalukkas')) {
+            // Joyalukkas needs explicit selector wait for pricing table
+            await page.waitForSelector('body', { timeout: 10000 });
+            await new Promise(r => setTimeout(r, 8000));
+        } else if (provider.name.includes('Shine')) {
+            await new Promise(r => setTimeout(r, 12000));
         }
     } catch (gotoError) {
-        console.warn(`   [Warn] Primary navigation event '${navEvent}' timed out, attempting extraction anyway...`);
+        console.warn(`   [Warn] Primary navigation event '${navEvent}' for ${provider.name} timed out, attempting extraction anyway...`);
     }
     
     // --- Provider-Specific Stabilization ---
