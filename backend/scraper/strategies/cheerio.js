@@ -26,22 +26,24 @@ async function scrapeWithCheerio(provider) {
     /**
      * findPrice (Heuristic Engine)
      */
-    const findPrice = (karatLabel, nextKaratLabel = null, assignedPrices = []) => {
+    const findPrice = (karatLabel, assignedPrices = []) => {
         let price = null;
         
         const startIndex = bodyText.indexOf(karatLabel);
         if (startIndex === -1) return null;
         
-        // Search in a narrow 150-char window AFTER the label
-        const windowSize = 150;
+        // Expand search window to 300-char to handle nested layouts in aggregators
+        const windowSize = 300;
         const searchArea = bodyText.substring(startIndex, startIndex + windowSize);
 
-        const matches = searchArea.match(/(\d{2,3}\.\d{2})/g) || searchArea.match(/(\d{2,3})/g);
+        // Regex targets values with decimals
+        const matches = searchArea.match(/(\d{3,}\.\d{2})/g) || searchArea.match(/(\d{3,})/g);
         if (matches) {
             // Find the first valid price that isn't already assigned to a higher karat
             const found = matches.find(n => {
                 const val = parseFloat(n);
-                return val > 100 && val < 2000 && !assignedPrices.includes(n);
+                // Gold price in Qatar is strictly > 300 and < 1000 per gram currently
+                return val > 300 && val < 1000 && !assignedPrices.includes(n);
             });
             if (found) price = found;
         }
