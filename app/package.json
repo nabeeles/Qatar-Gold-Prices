@@ -56,7 +56,9 @@
   "overrides": {
     "postcss": "^8.5.3",
     "@xmldom/xmldom": "^0.9.6",
-    "uuid": "^11.1.0"
+    "uuid": "^14.0.0",
+    "d3-color": "^3.1.0",
+    "inflight": "^1.0.6"
   },
   "private": true
 }
