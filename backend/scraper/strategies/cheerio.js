@@ -3,8 +3,6 @@ const cheerio = require('cheerio');
 
 /**
  * Cheerio Scraping Strategy
- * 
- * Optimized for high-fidelity extraction from market aggregator homes.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -28,7 +26,9 @@ async function scrapeWithCheerio(provider) {
         const startIndex = bodyText.indexOf(karatLabel);
         if (startIndex === -1) return null;
         
-        const searchArea = bodyText.substring(startIndex, startIndex + 150);
+        const windowSize = 300;
+        const searchArea = bodyText.substring(startIndex, startIndex + windowSize);
+
         const matches = searchArea.match(/(\d{3,}\.\d{2})/g);
         
         if (matches) {
@@ -46,44 +46,27 @@ async function scrapeWithCheerio(provider) {
      */
     const name = provider.name.toLowerCase();
     
-    // Malabar specific pattern: "The gold rate in Qatar in Malabar is 552.50"
-    if (name.includes('malabar')) {
-        const match = bodyText.match(/Malabar is\s*(\d+\.\d{2})/i);
-        if (match) results['24k'] = match[1];
-    }
-    
-    // Joyalukkas specific pattern
-    if (name.includes('joyalukkas')) {
-        const match = bodyText.match(/Joyalukkas is\s*(\d+\.\d{2})/i);
-        if (match) results['24k'] = match[1];
-    }
-
-    // Al Fardan specific pattern
-    if (name.includes('fardan')) {
-        const match = bodyText.match(/Al Fardan is\s*(\d+\.\d{2})/i);
-        if (match) results['24k'] = match[1];
-    }
-
-    // Shine specific pattern
-    if (name.includes('shine')) {
-        const match = bodyText.match(/Shine is\s*(\d+\.\d{2})/i);
-        if (match) results['24k'] = match[1];
+    // Aggregator patterns: "The gold rate in Qatar in [Brand] is 552.50"
+    const brandPattern = new RegExp(`${provider.name.split(' ')[0]} is\\s*(\\d+\\.\\d{2})`, 'i');
+    const match = bodyText.match(brandPattern);
+    if (match) {
+        results['24k'] = match[1];
     }
 
     // Apply General Heuristic for all categories (24k, 22k, 18k)
     const used = Object.values(results).filter(v => !!v);
     if (!results['24k']) {
-        results['24k'] = findPrice('24K', used) || findPrice('24KT', used) || findPrice('24 Karat', used);
+        results['24k'] = findPrice('24K', used) || findPrice('24KT', used);
         if (results['24k']) used.push(results['24k']);
     }
     
     if (!results['22k']) {
-        results['22k'] = findPrice('22K', used) || findPrice('22KT', used) || findPrice('22 Karat', used);
+        results['22k'] = findPrice('22K', used) || findPrice('22KT', used);
         if (results['22k']) used.push(results['22k']);
     }
     
     if (!results['18k']) {
-        results['18k'] = findPrice('18K', used) || findPrice('18KT', used) || findPrice('18 Karat', used);
+        results['18k'] = findPrice('18K', used) || findPrice('18KT', used);
     }
 
     return results;
