@@ -24,40 +24,31 @@ async function scrapeWithCheerio(provider) {
     const bodyText = $('body').text().replace(/\s+/g, ' ');
 
     /**
-     * Heuristic Engine: Finds numeric price values associated with a karat label.
+     * findPrice (Heuristic Engine)
+     * 
+     * Robustness:
+     * - Uses "Ranged Anchoring": Searches for the price between the current karat 
+     *   label and the next logical label to prevent cross-contamination.
+     * - Prioritizes market-realistic decimal values.
      */
-    const findPrice = (karatLabel) => {
+    const findPrice = (karatLabel, nextKaratLabel = null) => {
         let price = null;
         
-        /**
-         * Cleanses raw string data into a standard numeric format.
-         */
-        const cleanPrice = (text) => {
-            if (!text) return null;
-            // Normalize: remove commas and handle spaced decimals (e.g., "556 . 00")
-            const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
-            const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
-            
-            if (match) {
-                const val = parseFloat(match[1]);
-                if (val > 100 && val < 2000) return match[1];
-            }
-            return null;
-        };
+        // Define search boundary to avoid picking up the wrong karat's price
+        const startIndex = bodyText.indexOf(karatLabel);
+        if (startIndex === -1) return null;
+        
+        const endIndex = nextKaratLabel ? bodyText.indexOf(nextKaratLabel, startIndex) : startIndex + 300;
+        const searchArea = bodyText.substring(startIndex, endIndex === -1 ? startIndex + 300 : endIndex);
 
-        // Strategy A: Targeted DOM Search
-        $(`*:contains("${karatLabel}")`).each((i, el) => {
-            if (price) return;
-            const contextText = $(el).parent().text() || $(el).text();
-            price = cleanPrice(contextText.substring(contextText.indexOf(karatLabel)));
-        });
-
-        // Strategy B: Global Stream Scanning
-        if (!price) {
-            const index = bodyText.indexOf(karatLabel);
-            if (index !== -1) {
-                price = cleanPrice(bodyText.substring(index));
-            }
+        // Regex targets values with decimals (e.g., 250.50 or 2,500.00)
+        const matches = searchArea.match(/(\d{2,3}\.\d{2})/g) || searchArea.match(/(\d{2,3})/g);
+        if (matches) {
+            const found = matches.find(n => {
+                const val = parseFloat(n);
+                return val > 100 && val < 2000;
+            });
+            if (found) price = found;
         }
 
         return price;
@@ -76,9 +67,19 @@ async function scrapeWithCheerio(provider) {
         if (match22) results['22k'] = match22[1];
     }
 
-    // Dynamic Heuristic Fallback
-    if (!results['24k']) results['24k'] = findPrice('24K') || findPrice('24 KT');
-    if (!results['22k']) results['22k'] = findPrice('22K') || findPrice('22 KT');
+    // Dynamic Ranged Heuristic Fallback
+    if (!results['24k']) {
+        results['24k'] = findPrice('24K', '22K') || findPrice('24KT', '22KT') || findPrice('24 Karat', '22 Karat');
+    }
+    if (!results['22k']) {
+        results['22k'] = findPrice('22K', '21K') || findPrice('22KT', '21KT') || findPrice('22 Karat', '21 Karat');
+    }
+    if (!results['21k']) {
+        results['21k'] = findPrice('21K', '18K') || findPrice('21KT', '18KT') || findPrice('21 Karat', '18 Karat');
+    }
+    if (!results['18k']) {
+        results['18k'] = findPrice('18K', '14K') || findPrice('18KT', '14KT') || findPrice('18 Karat', '14 Karat');
+    }
 
     return results;
   } catch (error) {
