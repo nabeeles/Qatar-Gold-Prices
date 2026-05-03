@@ -27,7 +27,7 @@
         "backgroundColor": "#0A0A0A"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 23
+      "versionCode": 24
     },
     "web": {
       "bundler": "metro",

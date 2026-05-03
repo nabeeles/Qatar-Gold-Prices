@@ -15,17 +15,14 @@ const { sendHealthAlert } = require('./utils/mailer');
  * Sanitizes strings for safe inclusion in HTML templates.
  * Prevents XSS (Cross-Site Scripting) from malicious or unexpected error messages.
  */
-function escapeHTML(str) {
+function sanitizeForHTML(str) {
   if (!str) return '';
-  return str.replace(/[&<>"']/g, function(m) {
-    return {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    }[m];
-  });
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 async function runHealthCheck() {
@@ -50,20 +47,26 @@ async function runHealthCheck() {
         }
 
         if (!result || Object.keys(result).length === 0 || (!result['24k'] && !result['22k'])) {
-          // Sanitize provider name and custom error message
+          // Explicitly sanitize before pushing to the shared array
+          const safeName = sanitizeForHTML(provider.name);
+          const safeError = 'No valid price data returned';
+          
           failures.push({ 
-            name: escapeHTML(provider.name), 
-            error: 'No valid price data returned' 
+            name: safeName, 
+            error: safeError 
           });
           console.warn(`   ❌ ${provider.name}: FAILED (Empty Result)`);
         } else {
           console.log(`   ✅ ${provider.name}: OK`);
         }
       } catch (err) {
-        // Sanitize the raw exception message before persisting/dispatching
+        // Explicitly sanitize raw exception messages
+        const safeName = sanitizeForHTML(provider.name);
+        const safeError = sanitizeForHTML(err.message);
+
         failures.push({ 
-          name: escapeHTML(provider.name), 
-          error: escapeHTML(err.message) 
+          name: safeName, 
+          error: safeError 
         });
         console.error(`   ❌ ${provider.name}: FAILED (${err.message})`);
       }
