@@ -3,6 +3,8 @@ const cheerio = require('cheerio');
 
 /**
  * Cheerio Scraping Strategy
+ * 
+ * Optimized for high-fidelity extraction from market aggregator homes.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -26,10 +28,9 @@ async function scrapeWithCheerio(provider) {
         const startIndex = bodyText.indexOf(karatLabel);
         if (startIndex === -1) return null;
         
-        const windowSize = 300;
-        const searchArea = bodyText.substring(startIndex, startIndex + windowSize);
-
-        const matches = searchArea.match(/(\d{3,}\.\d{2})/g) || searchArea.match(/(\d{3,})/g);
+        const searchArea = bodyText.substring(startIndex, startIndex + 150);
+        const matches = searchArea.match(/(\d{3,}\.\d{2})/g);
+        
         if (matches) {
             const found = matches.find(n => {
                 const val = parseFloat(n);
@@ -41,30 +42,48 @@ async function scrapeWithCheerio(provider) {
     };
 
     /**
-     * Brand-Specific Mapping (Malabar, etc.)
+     * Brand-Specific High-Fidelity Mapping
      */
-    if (provider.name.includes('Malabar')) {
-        const malabarMatch = bodyText.match(/Malabar is\s*(\d+\.\d+)/i);
-        if (malabarMatch) {
-            results['24k'] = malabarMatch[1];
-            // 22k is usually ~92% of 24k, but we'll try to find it in the text
-            const m22 = bodyText.match(/22 Karat Gold is QAR\s*(\d+\.\d+)/i);
-            if (m22) results['22k'] = m22[1];
-        }
+    const name = provider.name.toLowerCase();
+    
+    // Malabar specific pattern: "The gold rate in Qatar in Malabar is 552.50"
+    if (name.includes('malabar')) {
+        const match = bodyText.match(/Malabar is\s*(\d+\.\d{2})/i);
+        if (match) results['24k'] = match[1];
+    }
+    
+    // Joyalukkas specific pattern
+    if (name.includes('joyalukkas')) {
+        const match = bodyText.match(/Joyalukkas is\s*(\d+\.\d{2})/i);
+        if (match) results['24k'] = match[1];
     }
 
-    // Dynamic Heuristic with Uniqueness check
-    const used = [];
+    // Al Fardan specific pattern
+    if (name.includes('fardan')) {
+        const match = bodyText.match(/Al Fardan is\s*(\d+\.\d{2})/i);
+        if (match) results['24k'] = match[1];
+    }
+
+    // Shine specific pattern
+    if (name.includes('shine')) {
+        const match = bodyText.match(/Shine is\s*(\d+\.\d{2})/i);
+        if (match) results['24k'] = match[1];
+    }
+
+    // Apply General Heuristic for all categories (24k, 22k, 18k)
+    const used = Object.values(results).filter(v => !!v);
     if (!results['24k']) {
-        results['24k'] = findPrice('24K', used) || findPrice('24KT', used);
+        results['24k'] = findPrice('24K', used) || findPrice('24KT', used) || findPrice('24 Karat', used);
         if (results['24k']) used.push(results['24k']);
     }
+    
     if (!results['22k']) {
-        results['22k'] = findPrice('22K', used) || findPrice('22KT', used);
+        results['22k'] = findPrice('22K', used) || findPrice('22KT', used) || findPrice('22 Karat', used);
         if (results['22k']) used.push(results['22k']);
     }
+    
     if (!results['18k']) {
-        results['18k'] = findPrice('18K', used) || findPrice('18KT', used);
+        results['18k'] = findPrice('18K', used) || findPrice('18KT', used) || findPrice('18 Karat', used);
     }
 
     return results;
