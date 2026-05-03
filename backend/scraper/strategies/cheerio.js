@@ -8,11 +8,6 @@ const cheerio = require('cheerio');
  * Executes high-performance, lightweight HTML parsing for static data sources and 
  * market aggregators. This engine is optimized for stability and speed, serving 
  * as the primary fail-safe for critical retail providers.
- * 
- * Orchestration Flow:
- * 1. GET: Retrieves the raw HTML document via Axios with browser-spoofing headers.
- * 2. DOM: Loads the document into a traversable Cheerio object.
- * 3. SCAN: Applies multi-stage heuristic analysis to identify pricing components.
  */
 async function scrapeWithCheerio(provider) {
   try {
@@ -29,52 +24,39 @@ async function scrapeWithCheerio(provider) {
     const bodyText = $('body').text().replace(/\s+/g, ' ');
 
     /**
-     * findPrice (Heuristic Engine)
-     * 
-     * Identifies numeric gold rates by scanning for "Karat Anchors" and evaluating 
-     * the immediate textual surroundings.
-     * 
-     * Filtering Logic:
-     * - Decimals Required: Targets high-precision strings (e.g., 552.50) to ignore 
-     *   integer counts (like "380 stores") or years (e.g., "2026").
-     * - Market Range: Validates that the price is between 100 and 2000 QAR/gram.
+     * Heuristic Engine: Finds numeric price values associated with a karat label.
      */
     const findPrice = (karatLabel) => {
         let price = null;
         
-        // Strategy A: Contextual DOM Proximity
-        // Look for the label and scan the immediate parent's text for decimal values.
+        /**
+         * Cleanses raw string data into a standard numeric format.
+         */
+        const cleanPrice = (text) => {
+            if (!text) return null;
+            // Normalize: remove commas and handle spaced decimals (e.g., "556 . 00")
+            const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
+            const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
+            
+            if (match) {
+                const val = parseFloat(match[1]);
+                if (val > 100 && val < 2000) return match[1];
+            }
+            return null;
+        };
+
+        // Strategy A: Targeted DOM Search
         $(`*:contains("${karatLabel}")`).each((i, el) => {
             if (price) return;
             const contextText = $(el).parent().text() || $(el).text();
-            const labelIndex = contextText.indexOf(karatLabel);
-            if (labelIndex !== -1) {
-                const searchArea = contextText.substring(labelIndex, labelIndex + 150);
-                const matches = searchArea.match(/(\d{2,3}\.\d{2})/g);
-                if (matches) {
-                    const found = matches.find(n => {
-                        const val = parseFloat(n);
-                        return val > 100 && val < 2000;
-                    });
-                    if (found) price = found;
-                }
-            }
+            price = cleanPrice(contextText.substring(contextText.indexOf(karatLabel)));
         });
 
-        // Strategy B: Global Body Stream Scanning
-        // Fallback for non-standard or fragmented HTML layouts.
+        // Strategy B: Global Stream Scanning
         if (!price) {
             const index = bodyText.indexOf(karatLabel);
             if (index !== -1) {
-                const afterText = bodyText.substring(index, index + 200);
-                const matches = afterText.match(/(\d{2,3}\.\d{2})/g);
-                if (matches) {
-                    const found = matches.find(n => {
-                        const val = parseFloat(n);
-                        return val > 100 && val < 2000;
-                    });
-                    if (found) price = found;
-                }
+                price = cleanPrice(bodyText.substring(index));
             }
         }
 

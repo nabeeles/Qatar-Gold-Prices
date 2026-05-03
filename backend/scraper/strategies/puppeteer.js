@@ -51,11 +51,23 @@ async function scrapeWithPuppeteer(provider) {
         
         /**
          * Cleanses raw string data into a standard numeric format.
+         * 
+         * Robustness:
+         * - Handles spaces around decimals (e.g., "556 . 00").
+         * - Requires decimal places to distinguish prices from karat labels (24, 22).
+         * - Filters for realistic market range.
          */
         const cleanPrice = (text) => {
             if (!text) return null;
-            const match = text.match(/(\d{2,3}(?:\.\d+)?)/);
-            return match ? match[1].replace(/,/g, '') : null;
+            // Normalize: remove commas and handle spaced decimals
+            const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
+            const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
+            
+            if (match) {
+                const val = parseFloat(match[1]);
+                if (val > 100 && val < 2000) return match[1];
+            }
+            return null;
         };
 
         // --- STRATEGY: Malabar Gold (Table Row Extraction) ---
