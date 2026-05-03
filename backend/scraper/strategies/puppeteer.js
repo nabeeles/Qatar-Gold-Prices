@@ -7,12 +7,6 @@ const puppeteer = require('puppeteer');
  * Orchestrates a Chromium instance in headless mode to handle dynamic, 
  * stateful, or heavily hydrated retail websites. This engine is the primary 
  * choice for providers requiring regional selection or DOM-resident price tables.
- * 
- * Interaction Lifecycle:
- * 1. LAUNCH: Starts a sandboxed browser instance with no-sandbox flags for CI safety.
- * 2. NAVIGATE: Visits the secure endpoint with custom User-Agent and viewport.
- * 3. HYDRATE: Implements provider-specific wait periods for AJAX/React mounting.
- * 4. EXTRACT: Executes in-browser JS to parse structured DOM elements.
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
@@ -28,32 +22,23 @@ async function scrapeWithPuppeteer(provider) {
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
-    // Use 'load' event for better stability with Malabar's hybrid hydration
-    const navEvent = provider.name.includes('Malabar') || provider.name.includes('Shine') ? 'load' : 'domcontentloaded';
+    // Using 'load' event for maximum visibility of dynamic elements
+    const navEvent = 'load';
     
     try {
         await page.goto(provider.url, { waitUntil: navEvent, timeout: 90000 });
         
-        if (provider.name.includes('Malabar')) {
-            await new Promise(r => setTimeout(r, 15000));
-        } else if (provider.name.includes('Joyalukkas')) {
-            // Joyalukkas needs explicit selector wait for pricing table
-            await page.waitForSelector('body', { timeout: 10000 });
-            await new Promise(r => setTimeout(r, 8000));
-        } else if (provider.name.includes('Shine')) {
-            await new Promise(r => setTimeout(r, 12000));
-        }
+        // Stabilization debounce
+        const waitTime = provider.name.includes('Malabar') ? 15000 : 8000;
+        await new Promise(r => setTimeout(r, waitTime));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation event '${navEvent}' for ${provider.name} timed out, attempting extraction anyway...`);
-    }
-    
-    // --- Provider-Specific Stabilization ---
-    if (provider.name.includes('Shine')) {
-        await new Promise(r => setTimeout(r, 10000));
     }
 
     const prices = await page.evaluate((pName) => {
         const res = {};
+        if (!document.body) return null;
+        
         const bodyText = document.body.innerText.replace(/\s+/g, ' ');
         
         /**
@@ -61,13 +46,11 @@ async function scrapeWithPuppeteer(provider) {
          */
         const cleanPrice = (text) => {
             if (!text) return null;
-            // Normalize: remove commas and handle spaced decimals (e.g., "556 . 00")
             const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
             const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
-            
             if (match) {
                 const val = parseFloat(match[1]);
-                if (val > 100 && val < 2000) return match[1];
+                if (val > 300 && val < 1000) return match[1];
             }
             return null;
         };
@@ -79,14 +62,15 @@ async function scrapeWithPuppeteer(provider) {
             const index = bodyText.indexOf(karatLabel);
             if (index === -1) return null;
             
-            const searchArea = bodyText.substring(index, index + 200);
+            const searchArea = bodyText.substring(index, index + 300);
             const matches = searchArea.match(/(\d{3,}(?:\.\d+)?)/g);
             
             if (matches) {
                 const found = matches.find(n => {
                     const cleanN = n.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
                     const val = parseFloat(cleanN);
-                    return val > 100 && val < 2000 && !assignedPrices.includes(cleanN);
+                    // Standard retail range for Qatar currently
+                    return val > 300 && val < 1000 && !assignedPrices.includes(cleanN);
                 });
                 return found ? found.replace(/,/g, '').replace(/\s+\.\s+/g, '.') : null;
             }
@@ -100,11 +84,13 @@ async function scrapeWithPuppeteer(provider) {
             if (qatarRow) {
                 const cells = Array.from(qatarRow.querySelectorAll('td'));
                 if (cells.length >= 3) {
-                    res['22k'] = cleanPrice(cells[1].innerText);
-                    res['24k'] = cleanPrice(cells[2].innerText);
+                    const p22 = cleanPrice(cells[1].innerText);
+                    const p24 = cleanPrice(cells[2].innerText);
+                    if (p22) res['22k'] = p22;
+                    if (p24) res['24k'] = p24;
+                    return res;
                 }
             }
-            return res;
         }
 
         // --- STRATEGY: Dynamic Heuristic (Joyalukkas, Shine, etc.) ---
@@ -127,7 +113,7 @@ async function scrapeWithPuppeteer(provider) {
     return prices;
 
   } catch (err) {
-    console.error(`   [Puppeteer] Critical synchronization failure: ${err.message}`);
+    console.error(`   [Puppeteer] Critical synchronization failure for ${provider.name}: ${err.message}`);
     return null;
   } finally {
     await browser.close();
