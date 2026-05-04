@@ -2,28 +2,11 @@ const { getActiveProviders } = require('./utils/db');
 const { scrapeWithPuppeteer } = require('./strategies/puppeteer');
 const { scrapeWithCheerio } = require('./strategies/cheerio');
 const { sendHealthAlert } = require('./utils/mailer');
+const escapeHTML = require('escape-html');
 
 /**
  * Daily Provider Health Check
- * 
- * Objective: 
- * Systematically test all active gold price data sources.
- * If any provider fails to return data, notify the administrator via email.
  */
-
-/**
- * Sanitizes strings for safe inclusion in HTML templates.
- * Prevents XSS (Cross-Site Scripting) from malicious or unexpected error messages.
- */
-function sanitizeForHTML(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
 
 async function runHealthCheck() {
   console.log('--- Starting Daily Provider Health Check ---');
@@ -33,7 +16,7 @@ async function runHealthCheck() {
     const providers = await getActiveProviders();
     console.log(`Testing ${providers.length} active providers...`);
 
-    const failures = [];
+    const failureItems = [];
 
     for (const provider of providers) {
       console.log(`   [Test] ${provider.name}...`);
@@ -47,34 +30,24 @@ async function runHealthCheck() {
         }
 
         if (!result || Object.keys(result).length === 0 || (!result['24k'] && !result['22k'])) {
-          // Explicitly sanitize before pushing to the shared array
-          const safeName = sanitizeForHTML(provider.name);
+          const safeName = escapeHTML(provider.name);
           const safeError = 'No valid price data returned';
-          
-          failures.push({ 
-            name: safeName, 
-            error: safeError 
-          });
+          failureItems.push(`<li><b>${safeName}</b>: ${safeError}</li>`);
           console.warn(`   ❌ ${provider.name}: FAILED (Empty Result)`);
         } else {
           console.log(`   ✅ ${provider.name}: OK`);
         }
       } catch (err) {
-        // Explicitly sanitize raw exception messages
-        const safeName = sanitizeForHTML(provider.name);
-        const safeError = sanitizeForHTML(err.message);
-
-        failures.push({ 
-          name: safeName, 
-          error: safeError 
-        });
+        const safeName = escapeHTML(provider.name);
+        const safeError = escapeHTML(err.message);
+        failureItems.push(`<li><b>${safeName}</b>: ${safeError}</li>`);
         console.error(`   ❌ ${provider.name}: FAILED (${err.message})`);
       }
     }
 
-    if (failures.length > 0) {
-      console.log(`\n🚨 Detected ${failures.length} failures. Sending alert...`);
-      await sendHealthAlert(failures);
+    if (failureItems.length > 0) {
+      console.log(`\n🚨 Detected ${failureItems.length} failures. Sending alert...`);
+      await sendHealthAlert(failureItems.join(''));
     } else {
       console.log('\n🌟 All systems healthy. No action required.');
     }

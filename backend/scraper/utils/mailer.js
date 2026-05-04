@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const escapeHTML = require('escape-html');
 
 /**
  * Mailer Utility
@@ -14,44 +15,24 @@ const transporter = nodemailer.createTransport({
 });
 
 /**
- * Sanitizes strings for safe inclusion in HTML templates.
- * Prevents XSS (Cross-Site Scripting) from malicious or unexpected error messages.
- */
-function escapeHTML(str) {
-  if (!str) return '';
-  return str.toString().replace(/[&<>"']/g, function(m) {
-    return {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    }[m];
-  });
-}
-
-/**
  * Sends a health alert email with the list of failed providers.
- * @param {Array} failures - Array of objects containing { name, error }.
+ * @param {string} failureHtmlList - Pre-escaped HTML string containing <li> tags.
  */
-async function sendHealthAlert(failures) {
+async function sendHealthAlert(failureHtmlList) {
   if (!process.env.NOTIFICATION_EMAIL) {
       console.warn('[Mailer] NOTIFICATION_EMAIL not set, skipping email alert.');
       return;
   }
 
-  // Failure data is pre-sanitized in health-check.js to satisfy SAST analyzers.
-  const failureList = failures.map(f => `<li><b>${f.name}</b>: ${f.error}</li>`).join('');
-  
   const mailOptions = {
     from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
     to: process.env.NOTIFICATION_EMAIL,
-    subject: `🚨 Gold Scraper Alert: ${failures.length} Providers Failed`,
+    subject: `🚨 Gold Scraper Alert: Provider Failures Detected`,
     html: `
       <h2>Data Source Health Alert</h2>
       <p>The daily health check detected issues with the following data sources:</p>
       <ul>
-        ${failureList}
+        ${failureHtmlList}
       </ul>
       <p>Please check the <a href="https://github.com/nabeeles/Qatar-Gold-Prices/actions">GitHub Actions logs</a> for details.</p>
       <br/>
