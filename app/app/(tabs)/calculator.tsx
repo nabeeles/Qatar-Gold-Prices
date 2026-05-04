@@ -81,7 +81,7 @@ export default function Calculator() {
         {/* Input Section */}
         <View>
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 'bold', uppercase: 'true', marginBottom: 12, marginLeft: 4 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 }}>
               Gold Weight (Grams)
             </Text>
             <View style={{ backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center' }}>
@@ -98,7 +98,7 @@ export default function Calculator() {
           </View>
 
           <View style={{ marginBottom: 24 }}>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 'bold', uppercase: 'true', marginBottom: 12, marginLeft: 4 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 12, marginLeft: 4 }}>
               Select Purity
             </Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

@@ -82,7 +82,7 @@ export default function Alerts() {
             <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', padding: 4, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
               <TouchableOpacity 
                 onPress={() => setCondition('below')}
-                style={{ flex: 1, py: 12, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: condition === 'below' ? '#D4AF37' : 'transparent' }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', backgroundColor: condition === 'below' ? '#D4AF37' : 'transparent' }}
               >
                 <Text style={{ fontWeight: 'bold', fontSize: 12, color: condition === 'below' ? '#000000' : '#A0A0A0' }}>BELOW</Text>
               </TouchableOpacity>
