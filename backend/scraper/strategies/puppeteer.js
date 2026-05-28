@@ -80,16 +80,22 @@ async function scrapeWithPuppeteer(provider) {
 
         // --- STRATEGY: Malabar Gold (Table Row Extraction) ---
         if (pName.includes('Malabar')) {
-            const rows = Array.from(document.querySelectorAll('tr'));
-            const qatarRow = rows.find(r => (r.innerText.includes('Qatar') || r.innerText.includes('Doha')) && r.innerText.includes('QAR'));
-            if (qatarRow) {
-                const cells = Array.from(qatarRow.querySelectorAll('td'));
-                if (cells.length >= 2) {
-                    // Usually 22K is first in their table
-                    const p22 = cleanPrice(cells[1].innerText);
-                    const p24 = cleanPrice(cells[2] ? cells[2].innerText : null);
-                    if (p22) res['22k'] = p22;
-                    if (p24) res['24k'] = p24;
+            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row'));
+            const qatarElement = allElements.find(el => {
+                const txt = el.textContent || '';
+                return (txt.toLowerCase().includes('qatar') || txt.toLowerCase().includes('doha')) && 
+                       (txt.includes('QAR') || txt.includes('qar'));
+            });
+
+            if (qatarElement) {
+                // Try to find all number-like patterns in this specific element
+                const txt = qatarElement.textContent.replace(/\s+/g, ' ');
+                const matches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
+                if (matches && matches.length >= 2) {
+                    // In their table: [Qatar, 22K_Price, 24K_Price]
+                    // We map them correctly based on the usual order (22K then 24K)
+                    res['22k'] = matches[0];
+                    res['24k'] = matches[1];
                     return res;
                 }
             }
