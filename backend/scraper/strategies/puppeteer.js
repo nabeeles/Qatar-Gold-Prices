@@ -78,24 +78,31 @@ async function scrapeWithPuppeteer(provider) {
             return null;
         };
 
-        // --- STRATEGY: Malabar Gold (Table Row Extraction) ---
+        // --- STRATEGY: Malabar Gold (Refined Table Extraction) ---
         if (pName.includes('Malabar')) {
-            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row'));
-            const qatarElement = allElements.find(el => {
-                const txt = el.textContent || '';
-                return (txt.toLowerCase().includes('qatar') || txt.toLowerCase().includes('doha')) && 
-                       (txt.includes('QAR') || txt.includes('qar'));
+            const potentialRows = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row'));
+            // Filter for rows that actually look like a Qatar price row
+            const qatarRows = potentialRows.filter(el => {
+                const txt = (el.textContent || '').toLowerCase();
+                return (txt.includes('qatar') || txt.includes('doha')) && 
+                       txt.includes('qar') &&
+                       /\d{3}/.test(txt); // Must have a 3-digit number (price)
             });
 
-            if (qatarElement) {
-                // Try to find all number-like patterns in this specific element
+            // Sort by text length (preferring concise rows which are usually table rows)
+            qatarRows.sort((a, b) => a.textContent.length - b.textContent.length);
+
+            if (qatarRows.length > 0) {
+                const qatarElement = qatarRows[0];
                 const txt = qatarElement.textContent.replace(/\s+/g, ' ');
                 const matches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
+                
                 if (matches && matches.length >= 2) {
-                    // In their table: [Qatar, 22K_Price, 24K_Price]
-                    // We map them correctly based on the usual order (22K then 24K)
-                    res['22k'] = matches[0];
-                    res['24k'] = matches[1];
+                    // Malabar usually lists 22K then 24K.
+                    // We'll be smart: 24K is always > 22K
+                    const vals = matches.map(m => parseFloat(m.replace(/,/g, ''))).sort((a,b) => a-b);
+                    res['22k'] = vals[0].toFixed(2);
+                    res['24k'] = vals[1].toFixed(2);
                     return res;
                 }
             }
