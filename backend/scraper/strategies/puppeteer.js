@@ -24,7 +24,7 @@ async function scrapeWithPuppeteer(provider) {
         }
         
         // Stabilization debounce
-        const waitTime = provider.name.includes('Malabar') ? 15000 : 10000;
+        const waitTime = provider.name.includes('Malabar') ? 25000 : 10000;
         await new Promise(r => setTimeout(r, waitTime));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
