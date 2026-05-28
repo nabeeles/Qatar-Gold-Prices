@@ -44,8 +44,8 @@ jobs:
       - name: Install Chrome and Dependencies
         run: |
           cd backend
-          # Install browser into our dedicated cache dir
-          npx puppeteer browsers install chrome
+          # Use the project's puppeteer to install the correct browser version
+          npx puppeteer install
           # Install system dependencies (requires sudo)
           sudo npx puppeteer browsers install chrome --install-deps
 
