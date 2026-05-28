@@ -40,10 +40,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-puppeteer-
 
-      - name: Install Chrome and Dependencies
-        run: |
-          npx puppeteer browsers install chrome --install-deps
-
       - name: Run Scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
