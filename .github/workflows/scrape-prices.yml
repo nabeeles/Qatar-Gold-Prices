@@ -44,10 +44,13 @@ jobs:
       - name: Install Chrome and Dependencies
         run: |
           cd backend
-          # Use the project's puppeteer to install the correct browser version
           npx puppeteer install
-          # Install system dependencies (requires sudo)
-          sudo npx puppeteer browsers install chrome --install-deps
+          # Preserve env vars for sudo to ensure correct cache path is used
+          sudo -E npx puppeteer browsers install chrome --install-deps
+
+      - name: Verify Chrome Installation
+        run: |
+          find ${{ env.PUPPETEER_CACHE_DIR }} -name "chrome" -type f -executable
 
       - name: Run Scraper
         env:
