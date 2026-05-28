@@ -32,9 +32,17 @@ jobs:
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
+      - name: Cache Puppeteer Browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-puppeteer-
+
       - name: Install Chrome and Dependencies
         run: |
-          sudo npx --yes puppeteer browsers install chrome --install-deps
+          npx puppeteer browsers install chrome --install-deps
 
       - name: Run Scraper
         env:
