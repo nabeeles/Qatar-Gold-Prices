@@ -11,6 +11,7 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.puppeteer-cache
 
     steps:
       - name: Checkout Code
@@ -35,10 +36,18 @@ jobs:
       - name: Cache Puppeteer Browser
         uses: actions/cache@v4
         with:
-          path: ~/.cache/puppeteer
+          path: ${{ env.PUPPETEER_CACHE_DIR }}
           key: ${{ runner.os }}-puppeteer-${{ hashFiles('backend/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-puppeteer-
+
+      - name: Install Chrome and Dependencies
+        run: |
+          cd backend
+          # Install browser into our dedicated cache dir
+          npx puppeteer browsers install chrome
+          # Install system dependencies (requires sudo)
+          sudo npx puppeteer browsers install chrome --install-deps
 
       - name: Run Scraper
         env:
