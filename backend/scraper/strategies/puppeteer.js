@@ -5,7 +5,8 @@ const puppeteer = require('puppeteer');
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
-  const browser = await puppeteer.launch({ 
+  
+  const launchOptions = {
     headless: "new",
     args: [
       '--no-sandbox', 
@@ -13,7 +14,14 @@ async function scrapeWithPuppeteer(provider) {
       '--disable-dev-shm-usage',
       '--disable-gpu'
     ]
-  });
+  };
+
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    console.log(`   [Info] Using custom browser path: ${launchOptions.executablePath}`);
+  }
+
+  const browser = await puppeteer.launch(launchOptions);
 
   try {
     const page = await browser.newPage();

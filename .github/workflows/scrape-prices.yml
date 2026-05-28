@@ -11,7 +11,7 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.puppeteer-cache
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
 
     steps:
       - name: Checkout Code
@@ -28,29 +28,6 @@ jobs:
         run: |
           cd backend
           npm ci
-
-      - name: Enable Sandbox Support
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Cache Puppeteer Browser
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PUPPETEER_CACHE_DIR }}
-          key: ${{ runner.os }}-puppeteer-${{ hashFiles('backend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-puppeteer-
-
-      - name: Install Chrome and Dependencies
-        run: |
-          cd backend
-          npx puppeteer install
-          # Preserve env vars for sudo to ensure correct cache path is used
-          sudo -E npx puppeteer browsers install chrome --install-deps
-
-      - name: Verify Chrome Installation
-        run: |
-          find ${{ env.PUPPETEER_CACHE_DIR }} -name "chrome" -type f -executable
 
       - name: Run Scraper
         env:
