@@ -43,6 +43,58 @@ async function scrapeWithPuppeteer(provider) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
 
+    // --- STRATEGY: Malabar Gold (Precision Table Extraction) ---
+    if (provider.name.includes('Malabar')) {
+        // 1. Dismiss any blocking modals/popups
+        try {
+            await page.evaluate(() => {
+                const selectors = ['.modal-close', '.close-btn', '.close-button', 'button[aria-label="Close"]', '.close', 'button.close'];
+                selectors.forEach(s => {
+                    const btn = document.querySelector(s);
+                    if (btn && typeof btn.click === 'function') btn.click();
+                });
+            });
+            await new Promise(r => setTimeout(r, 2000));
+        } catch (e) {}
+
+        // 2. Extract specific table data
+        const extracted = await page.evaluate(() => {
+            const tables = Array.from(document.querySelectorAll('table'));
+            const rateTable = tables.find(t => t.textContent.includes('kt/gm'));
+            
+            if (rateTable) {
+                const rows = Array.from(rateTable.querySelectorAll('tr'));
+                const qRow = rows.find(r => r.textContent.includes('Qatar'));
+                if (qRow) {
+                    const matches = qRow.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
+                    if (matches && matches.length >= 2) {
+                        const vals = matches.map(m => parseFloat(m)).filter(v => v > 350).sort((a,b) => a-b);
+                        if (vals.length >= 2) {
+                            return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                        }
+                    }
+                }
+            }
+
+            const allElements = Array.from(document.querySelectorAll('tr, div.row, .gold-rate-row'));
+            const bestMatch = allElements.find(el => {
+                const t = el.textContent;
+                return t.includes('Qatar') && t.includes('QAR') && t.includes('kt/gm');
+            });
+            
+            if (bestMatch) {
+                const matches = bestMatch.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
+                const vals = matches ? matches.map(m => parseFloat(m)).filter(v => v > 350).sort((a,b) => a-b) : [];
+                if (vals.length >= 2) {
+                    return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                }
+            }
+            return null;
+        });
+
+        if (extracted) return extracted;
+    }
+
     const prices = await page.evaluate((pName) => {
         const res = {};
         if (!document.body) return { error: 'No document body' };
@@ -77,44 +129,6 @@ async function scrapeWithPuppeteer(provider) {
             }
             return null;
         };
-
-        // --- STRATEGY: Malabar Gold (Ultra-Robust Table Extraction) ---
-        if (pName.includes('Malabar')) {
-            // Wait for any table or grid that might contain rates
-            const elements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row, td, li'));
-            
-            const qatarMatches = elements.filter(el => {
-                const txt = (el.textContent || '').toLowerCase();
-                const hasRegion = txt.includes('qatar') || txt.includes('doha');
-                const hasCurrency = txt.includes('qar') || txt.includes(' qr') || txt.includes('riyal');
-                const hasNumbers = /\d{3}/.test(txt);
-                return hasRegion && (hasCurrency || hasNumbers);
-            });
-
-            // Prioritize elements that have exactly two price-like numbers (22k and 24k)
-            const bestMatch = qatarMatches.find(el => {
-                const matches = el.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
-                return matches && matches.length >= 2;
-            }) || qatarMatches[0];
-
-            if (bestMatch) {
-                const txt = bestMatch.textContent.replace(/\s+/g, ' ');
-                const matches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
-                
-                if (matches && matches.length >= 2) {
-                    const vals = matches
-                        .map(m => parseFloat(m.replace(/,/g, '')))
-                        .filter(v => v > 300 && v < 1000)
-                        .sort((a,b) => a-b);
-                        
-                    if (vals.length >= 2) {
-                        res['22k'] = vals[0].toFixed(2);
-                        res['24k'] = vals[1].toFixed(2);
-                        return res;
-                    }
-                }
-            }
-        }
 
         // --- STRATEGY: Dynamic Heuristic (Joyalukkas, Shine, etc.) ---
         const used = [];
