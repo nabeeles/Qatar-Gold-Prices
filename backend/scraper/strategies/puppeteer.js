@@ -43,52 +43,69 @@ async function scrapeWithPuppeteer(provider) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
 
-    // --- STRATEGY: Malabar Gold (Precision Table Extraction) ---
+    // --- STRATEGY: Malabar Gold (Ultra-Precision Extraction) ---
     if (provider.name.includes('Malabar')) {
-        // 1. Dismiss any blocking modals/popups
         try {
-            await page.evaluate(() => {
-                const selectors = ['.modal-close', '.close-btn', '.close-button', 'button[aria-label="Close"]', '.close', 'button.close'];
-                selectors.forEach(s => {
-                    const btn = document.querySelector(s);
-                    if (btn && typeof btn.click === 'function') btn.click();
+            // Dismiss any blocking modals/popups multiple times
+            for (let i = 0; i < 2; i++) {
+                await page.evaluate(() => {
+                    const selectors = ['.modal-close', '.close-btn', '.close-button', 'button[aria-label="Close"]', '.close', 'button.close', '#close-btn'];
+                    selectors.forEach(s => {
+                        const btn = document.querySelector(s);
+                        if (btn && typeof btn.click === 'function') btn.click();
+                    });
                 });
-            });
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            
+            // Scroll a bit to trigger lazy loads
+            await page.evaluate(() => window.scrollBy(0, 500));
             await new Promise(r => setTimeout(r, 2000));
         } catch (e) {}
 
-        // 2. Extract specific table data
         const extracted = await page.evaluate(() => {
-            const tables = Array.from(document.querySelectorAll('table'));
-            const rateTable = tables.find(t => t.textContent.includes('kt/gm'));
+            const res = {};
+            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row, table, div'));
             
-            if (rateTable) {
-                const rows = Array.from(rateTable.querySelectorAll('tr'));
-                const qRow = rows.find(r => r.textContent.includes('Qatar'));
-                if (qRow) {
-                    const matches = qRow.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
-                    if (matches && matches.length >= 2) {
-                        const vals = matches.map(m => parseFloat(m)).filter(v => v > 350).sort((a,b) => a-b);
-                        if (vals.length >= 2) {
-                            return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
-                        }
+            // 1. Try to find the exact Qatar row
+            const matches = allElements.filter(el => {
+                const t = (el.textContent || '').toLowerCase();
+                const hasRegion = t.includes('qatar') || t.includes('doha');
+                const hasGold = t.includes('kt') || t.includes('karat') || t.includes('gold rate');
+                return hasRegion && hasGold;
+            });
+
+            // 2. Pick the match with the most numbers > 300
+            for (const el of matches) {
+                const txt = el.textContent.replace(/\s+/g, ' ');
+                const numMatches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
+                if (numMatches) {
+                    const vals = numMatches
+                        .map(m => parseFloat(m.replace(/,/g, '')))
+                        .filter(v => v > 350 && v < 1000)
+                        .sort((a,b) => a-b);
+                    
+                    if (vals.length >= 2) {
+                        // Found them!
+                        return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                    }
+                }
+            }
+            
+            // 3. Last ditch effort: scan EVERYTHING for Qatar + 2 numbers
+            const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
+            const qIndex = bodyTxt.indexOf('Qatar');
+            if (qIndex !== -1) {
+                const area = bodyTxt.substring(qIndex, qIndex + 500);
+                const areaNums = area.match(/(\d{3,}(?:\.\d+)?)/g);
+                if (areaNums) {
+                    const vals = areaNums.map(n => parseFloat(n)).filter(v => v > 350 && v < 1000).sort((a,b) => a-b);
+                    if (vals.length >= 2) {
+                        return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
                     }
                 }
             }
 
-            const allElements = Array.from(document.querySelectorAll('tr, div.row, .gold-rate-row'));
-            const bestMatch = allElements.find(el => {
-                const t = el.textContent;
-                return t.includes('Qatar') && t.includes('QAR') && t.includes('kt/gm');
-            });
-            
-            if (bestMatch) {
-                const matches = bestMatch.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
-                const vals = matches ? matches.map(m => parseFloat(m)).filter(v => v > 350).sort((a,b) => a-b) : [];
-                if (vals.length >= 2) {
-                    return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
-                }
-            }
             return null;
         });
 
