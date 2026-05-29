@@ -64,34 +64,31 @@ async function scrapeWithPuppeteer(provider) {
         } catch (e) {}
 
         const extracted = await page.evaluate(() => {
-            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row, td'));
+            const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
             
-            // 1. Try to find rows that look like gold rates
-            const qatarMatches = allElements.filter(el => {
-                const t = (el.textContent || '').toLowerCase();
-                const hasRegion = t.includes('qatar') || t.includes('doha');
-                const hasGold = t.includes('kt') || t.includes('karat') || t.includes('22k') || t.includes('24k');
-                const hasCurrency = t.includes('qar') || t.includes(' qr');
-                return hasRegion && hasGold && hasCurrency;
-            });
+            // Search for Qatar specifically in the text with associated prices
+            const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
+                           bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
 
-            // 2. Process matches and find the first one with 2 distinct prices > 380
-            for (const el of qatarMatches) {
-                const txt = el.textContent.replace(/\s+/g, ' ');
-                const numMatches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
-                if (numMatches) {
-                    const vals = numMatches
-                        .map(m => parseFloat(m.replace(/,/g, '')))
-                        .filter(v => v > 380 && v < 1000)
-                        .sort((a,b) => a-b);
-                    
-                    // Ensure we have at least 2 distinct prices
+            if (qMatch) {
+                const v1 = parseFloat(qMatch[1]);
+                const v2 = parseFloat(qMatch[2]);
+                if (v1 > 400 && v2 > 400) {
+                    const vals = [v1, v2].sort((a,b) => a-b);
+                    return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                }
+            }
+
+            // Fallback: Find the table row for Qatar
+            const allElements = Array.from(document.querySelectorAll('tr, div.row, td'));
+            const qRow = allElements.find(r => r.innerText.includes('Qatar') && r.innerText.includes('QAR'));
+            if (qRow) {
+                const matches = qRow.innerText.match(/(\d{3,}(?:\.\d+)?)/g);
+                if (matches) {
+                    const vals = matches.map(m => parseFloat(m)).filter(v => v > 400 && v < 1000).sort((a,b) => a-b);
                     const uniqueVals = [...new Set(vals)];
                     if (uniqueVals.length >= 2) {
-                        return { 
-                            '22k': uniqueVals[0].toFixed(2), 
-                            '24k': uniqueVals[1].toFixed(2) 
-                        };
+                        return { '22k': uniqueVals[0].toFixed(2), '24k': uniqueVals[1].toFixed(2) };
                     }
                 }
             }
