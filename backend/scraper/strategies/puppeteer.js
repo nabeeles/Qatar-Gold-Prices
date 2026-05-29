@@ -64,48 +64,37 @@ async function scrapeWithPuppeteer(provider) {
         } catch (e) {}
 
         const extracted = await page.evaluate(() => {
-            const res = {};
-            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row, table, div'));
+            const allElements = Array.from(document.querySelectorAll('tr, div.row, div.grid-row, .gold-rate-row, td'));
             
-            // 1. Try to find the exact Qatar row
-            const matches = allElements.filter(el => {
+            // 1. Try to find rows that look like gold rates
+            const qatarMatches = allElements.filter(el => {
                 const t = (el.textContent || '').toLowerCase();
                 const hasRegion = t.includes('qatar') || t.includes('doha');
-                const hasGold = t.includes('kt') || t.includes('karat') || t.includes('gold rate');
-                return hasRegion && hasGold;
+                const hasGold = t.includes('kt') || t.includes('karat') || t.includes('22k') || t.includes('24k');
+                const hasCurrency = t.includes('qar') || t.includes(' qr');
+                return hasRegion && hasGold && hasCurrency;
             });
 
-            // 2. Pick the match with the most numbers > 300
-            for (const el of matches) {
+            // 2. Process matches and find the first one with 2 distinct prices > 380
+            for (const el of qatarMatches) {
                 const txt = el.textContent.replace(/\s+/g, ' ');
                 const numMatches = txt.match(/(\d{3,}(?:\.\d+)?)/g);
                 if (numMatches) {
                     const vals = numMatches
                         .map(m => parseFloat(m.replace(/,/g, '')))
-                        .filter(v => v > 350 && v < 1000)
+                        .filter(v => v > 380 && v < 1000)
                         .sort((a,b) => a-b);
                     
-                    if (vals.length >= 2) {
-                        // Found them!
-                        return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                    // Ensure we have at least 2 distinct prices
+                    const uniqueVals = [...new Set(vals)];
+                    if (uniqueVals.length >= 2) {
+                        return { 
+                            '22k': uniqueVals[0].toFixed(2), 
+                            '24k': uniqueVals[1].toFixed(2) 
+                        };
                     }
                 }
             }
-            
-            // 3. Last ditch effort: scan EVERYTHING for Qatar + 2 numbers
-            const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
-            const qIndex = bodyTxt.indexOf('Qatar');
-            if (qIndex !== -1) {
-                const area = bodyTxt.substring(qIndex, qIndex + 500);
-                const areaNums = area.match(/(\d{3,}(?:\.\d+)?)/g);
-                if (areaNums) {
-                    const vals = areaNums.map(n => parseFloat(n)).filter(v => v > 350 && v < 1000).sort((a,b) => a-b);
-                    if (vals.length >= 2) {
-                        return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
-                    }
-                }
-            }
-
             return null;
         });
 
