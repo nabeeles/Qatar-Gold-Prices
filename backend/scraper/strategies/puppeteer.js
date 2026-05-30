@@ -43,46 +43,21 @@ async function scrapeWithPuppeteer(provider) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
 
-    // --- STRATEGY: Malabar Gold (Geo-Spoofing & Precision Extraction) ---
+    // --- STRATEGY: Malabar Gold (Direct US-Path Extraction) ---
     if (provider.name.includes('Malabar')) {
         try {
-            // 1. Spoof Qatar Geolocation & Regional Headers
-            const context = page.browser().defaultBrowserContext();
-            await context.overridePermissions(provider.url, ['geolocation']);
-            await page.setGeolocation({ latitude: 25.2854, longitude: 51.5310 }); // Doha
-            await page.setExtraHTTPHeaders({
-                'Accept-Language': 'en-QA,en-US;q=0.9,en;q=0.8,ar;q=0.7',
-                'Referer': 'https://www.malabargoldanddiamonds.com/'
-            });
-
-            // 2. Inject Regional Cookies to force "Qatar" session
-            await page.setCookie({
-                name: 'store',
-                value: 'qatar_en',
-                domain: '.malabargoldanddiamonds.com',
-                path: '/'
-            });
-
-            // 3. Navigate and wait for content
-            await page.goto(provider.url, { waitUntil: 'networkidle2', timeout: 90000 });
-            await new Promise(r => setTimeout(r, 10000));
-
-            // 4. Dismiss blocking elements
+            // Dismiss any initial blocking elements
             await page.evaluate(() => {
-                const selectors = ['.modal-close', '.close-btn', '.close-button', 'button[aria-label="Close"]', 'button.close'];
-                selectors.forEach(s => {
-                    const btn = document.querySelector(s);
-                    if (btn) btn.click();
-                });
+                const selectors = ['.modal-close', '.close-btn', 'button[aria-label="Close"]', '.close'];
+                selectors.forEach(s => document.querySelector(s)?.click());
             });
-        } catch (e) {
-            console.warn(`   [Warn] Malabar session setup failed: ${e.message}`);
-        }
+            await new Promise(r => setTimeout(r, 5000));
+        } catch (e) {}
 
         const extracted = await page.evaluate(() => {
             const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
             
-            // Priority 1: Exact Qatar Row Match
+            // Search for Qatar specifically in the text (available on /us/ path)
             const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
                            bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
 
@@ -94,22 +69,6 @@ async function scrapeWithPuppeteer(provider) {
                     return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
                 }
             }
-
-            // Priority 2: Find table containing kt/gm
-            const tables = Array.from(document.querySelectorAll('table'));
-            const rateTable = tables.find(t => t.textContent.includes('kt/gm') || t.textContent.includes('Gold rate'));
-            if (rateTable) {
-                const rows = Array.from(rateTable.querySelectorAll('tr'));
-                const qRow = rows.find(r => r.textContent.includes('Qatar'));
-                if (qRow) {
-                    const matches = qRow.textContent.match(/(\d{3,}(?:\.\d+)?)/g);
-                    if (matches) {
-                        const vals = matches.map(m => parseFloat(m)).filter(v => v > 400 && v < 1000).sort((a,b) => a-b);
-                        if (vals.length >= 2) return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
-                    }
-                }
-            }
-
             return null;
         });
 
