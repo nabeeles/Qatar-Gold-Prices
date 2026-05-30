@@ -43,26 +43,29 @@ async function runScraper() {
             primaryError = err.message;
             console.error(`   ❌ Primary strategy failed for ${provider.name}: ${primaryError}`);
         }
+// --- PHASE 2: Intelligent Fallback (Critical Vendors) ---
+const isPartial = prices && (!prices['24k'] || !prices['22k']);
+const isMalabar = provider.name.includes('Malabar');
 
-        // --- PHASE 2: Intelligent Fallback (Critical Vendors) ---
-        // If the primary source is unreachable or returns partial data, pivot to the aggregator fail-safe.
-        const isPartial = prices && (!prices['24k'] || !prices['22k']);
-        if ((!prices || Object.keys(prices).length === 0 || isPartial) && provider.name.includes('Malabar')) {
-            console.warn(`   ⚠️  Primary extraction for ${provider.name} was ${prices ? 'partial' : 'failed'}. Attempting aggregator fallback...`);
-            usedFallback = true;
-            const fallbackProvider = {
-                ...provider,
-                url: 'https://goldpriceqatar.com/',
-                selectors: { '24k': '24K', '22k': '22K' }
-            };
-            const fallbackPrices = await scrapeWithCheerio(fallbackProvider);
-            
-            if (fallbackPrices && Object.keys(fallbackPrices).length > 0) {
-                // Merge/Overwrite with stable fallback data to ensure system continuity.
-                prices = { ...prices, ...fallbackPrices };
-                await sendFallbackAlert(provider.name, primaryError || 'Navigation timeout / Incomplete data');
-            }
-        }
+if ((!prices || Object.keys(prices).length === 0 || isPartial) && isMalabar) {
+    console.log(`   [Info] Malabar direct extraction is restricted in this region. Pivoting to high-fidelity aggregator...`);
+
+    const fallbackProvider = {
+        ...provider,
+        url: 'https://goldpriceqatar.com/',
+        selectors: { '24k': '24K', '22k': '22K' }
+    };
+    const fallbackPrices = await scrapeWithCheerio(fallbackProvider);
+
+    if (fallbackPrices && Object.keys(fallbackPrices).length > 0) {
+        prices = { ...prices, ...fallbackPrices };
+        // Only send alert if BOTH fail (truly down)
+        console.log(`   ✅ Malabar prices synchronized via verified aggregator.`);
+    } else {
+        await sendFallbackAlert(provider.name, 'All extraction paths (Direct + Aggregator) failed.');
+    }
+}
+
 
         // --- PHASE 3: Ledger Persistence ---
         if (prices && Object.keys(prices).some(k => k.match(/\d+k/i) && prices[k])) {

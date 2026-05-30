@@ -29,14 +29,6 @@ jobs:
           cd backend
           npm ci
 
-      - name: Run Malabar Diagnostic
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          cd backend
-          node diagnostic_malabar.js
-
       - name: Run Scraper
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
