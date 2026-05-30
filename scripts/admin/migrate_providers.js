@@ -45,7 +45,7 @@ async function migrate() {
         .from('providers')
         .insert({
             name: 'Malabar Gold',
-            url: 'https://www.malabargoldanddiamonds.com/ae/stores/qatar',
+            url: 'https://www.malabargoldanddiamonds.com/us/stores/qatar',
             scraping_type: 'direct',
             selectors: { "24k": "24K", "22k": "22K", "interactive": true }
         });
