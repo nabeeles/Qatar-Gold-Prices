@@ -106,42 +106,101 @@ async function scrapeWithPuppeteer(provider) {
         }
         
         // Stabilization debounce
-        const waitTime = provider.name.includes('Malabar') ? 25000 : 10000;
+        const waitTime = provider.name.includes('Malabar') ? 5000 : 10000;
         await new Promise(r => setTimeout(r, waitTime));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
 
-    // --- STRATEGY: Malabar Gold (Direct US-Path Extraction) ---
+    // --- STRATEGY: Malabar Gold (Tier 2 Interactive Browser Automation Fallback) ---
     if (provider.name.includes('Malabar')) {
         try {
-            // Dismiss any initial blocking elements
+            console.log('   [Malabar] Executing interactive browser automation fallback...');
+            
+            // Dismiss any initial blocking elements / modals
             await page.evaluate(() => {
-                const selectors = ['.modal-close', '.close-btn', 'button[aria-label="Close"]', '.close'];
+                const selectors = ['.modal-close', '.close-btn', 'button[aria-label="Close"]', '.close', '#onesignal-slidedown-cancel-button'];
                 selectors.forEach(s => document.querySelector(s)?.click());
             });
-            await new Promise(r => setTimeout(r, 5000));
-        } catch (e) {}
 
-        const extracted = await page.evaluate(() => {
-            const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
-            
-            // Search for Qatar specifically in the text (available on /us/ path)
-            const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
-                           bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
+            // Check if interactive gold-rate widget exists
+            const countrySelect = await page.$('#gold-country-list');
+            if (countrySelect) {
+                console.log('   [Malabar] Found interactive gold rate selector. Selecting Qatar (QA)...');
+                await page.select('#gold-country-list', 'QA');
 
-            if (qMatch) {
-                const v1 = parseFloat(qMatch[1]);
-                const v2 = parseFloat(qMatch[2]);
-                if (v1 > 400 && v2 > 400) {
-                    const vals = [v1, v2].sort((a,b) => a-b);
-                    return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                // Wait for state list to be populated with Doha
+                await page.waitForFunction(() => {
+                    const stateSel = document.querySelector('#gold-state-list');
+                    return stateSel && Array.from(stateSel.options).some(o => o.value === 'Doha');
+                }, { timeout: 15000 });
+
+                console.log('   [Malabar] State list populated. Selecting Doha...');
+                await page.select('#gold-state-list', 'Doha');
+
+                // Click submit button
+                const submitBtn = await page.$('.gold-rate-btn') || await page.$('button.submit');
+                if (submitBtn) {
+                    await submitBtn.click();
                 }
-            }
-            return null;
-        });
 
-        if (extracted) return extracted;
+                // Wait for rates to render in the DOM
+                await page.waitForFunction(() => {
+                    const txt = document.body ? document.body.innerText : '';
+                    return txt.includes('QAR') && (txt.includes('22 Carat') || txt.includes('24 Carat') || txt.includes('Todays Gold Rate'));
+                }, { timeout: 15000 });
+            }
+
+            const extracted = await page.evaluate(() => {
+                const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
+                const res = {};
+
+                // Primary parsing matching widget labels
+                const k22Match = bodyTxt.match(/\(?22\s*(?:Carat|KT|K)?\s*Gold\)?\s*(\d+\.\d+)\s*QAR/i) ||
+                                 bodyTxt.match(/(\d+\.\d+)\s*QAR[^\d]+22/i);
+                const k24Match = bodyTxt.match(/\(?24\s*(?:Carat|KT|K)?\s*Gold\)?\s*(\d+\.\d+)\s*QAR/i) ||
+                                 bodyTxt.match(/(\d+\.\d+)\s*QAR[^\d]+24/i);
+
+                if (k22Match) res['22k'] = parseFloat(k22Match[1]).toFixed(2);
+                if (k24Match) res['24k'] = parseFloat(k24Match[1]).toFixed(2);
+
+                // Secondary regex searching for pairs of QAR prices
+                if (!res['22k'] || !res['24k']) {
+                    const matches = bodyTxt.match(/(\d{3}\.\d{2})\s*QAR/gi);
+                    if (matches && matches.length >= 2) {
+                        const vals = matches.map(m => parseFloat(m.replace(/[^\d.]/g, ''))).filter(v => v > 300 && v < 1000).sort((a,b) => a-b);
+                        if (vals.length >= 2) {
+                            res['22k'] = vals[0].toFixed(2);
+                            res['24k'] = vals[1].toFixed(2);
+                        }
+                    }
+                }
+
+                // Tertiary fallback for static store table
+                if (!res['22k'] || !res['24k']) {
+                    const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
+                                   bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
+                    if (qMatch) {
+                        const v1 = parseFloat(qMatch[1]);
+                        const v2 = parseFloat(qMatch[2]);
+                        if (v1 > 300 && v2 > 300) {
+                            const vals = [v1, v2].sort((a,b) => a-b);
+                            res['22k'] = vals[0].toFixed(2);
+                            res['24k'] = vals[1].toFixed(2);
+                        }
+                    }
+                }
+
+                return (res['22k'] && res['24k']) ? res : null;
+            });
+
+            if (extracted) {
+                console.log('   ✅ [Malabar] Extracted live rates via browser automation:', extracted);
+                return extracted;
+            }
+        } catch (domErr) {
+            console.warn(`   [Warn] Malabar browser extraction failed: ${domErr.message}`);
+        }
     }
 
     // --- STRATEGY: Al Fardan Exchange (Direct Product Extraction) ---
