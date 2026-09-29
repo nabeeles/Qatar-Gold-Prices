@@ -7,7 +7,7 @@ This document details the methodologies, heuristics, and fail-safes used to sync
 ## 🤖 Orchestration: Dynamic Dispatch
 
 The scraper uses a tiered orchestration logic to balance accuracy and speed:
-1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Shine, Joyalukkas) that utilize heavy JavaScript hydration or require regional interaction.
+1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Joyalukkas, Malabar) that utilize heavy JavaScript hydration or require regional interaction.
 2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (GoodReturns, LivePriceOfGold) that provide fast, static HTML snapshots of the broader market.
 
 ---
@@ -32,7 +32,7 @@ Instead of relying on fragile CSS selectors (e.g., `.price-value`), the engine s
 -   **Market Range Validation:** Discards any value outside the realistic range of `100` to `2000` QAR per gram.
 
 ### 2. Multi-Column Mapping
-For tabular data (e.g., Shine Jewelers), the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned.
+For tabular data, the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned.
 
 ---
 
@@ -42,7 +42,6 @@ For tabular data (e.g., Shine Jewelers), the scraper maps header indices to data
 | :--- | :--- | :--- | :--- |
 | **Malabar Gold** | Direct | Store Locator | Primary: Official Store. Fallback: Aggregator. |
 | **Joyalukkas** | Direct | Regional Page | Requires browser hydration. |
-| **Shine Jewelers** | Direct | Rates Page | Stable <table> based extraction. |
 | **GoodReturns** | Aggregator | Market Feed | Very fast, high-reliability fallback. |
 | **LivePriceOfGold**| Aggregator | Market Feed | Global market sync. |
 
