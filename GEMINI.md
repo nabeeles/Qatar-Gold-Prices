@@ -8,7 +8,7 @@
 ## 🤖 AI Workflow & Architecture
 ### Scraper Orchestration (Primary-with-Fallback)
 - **Engine Dispatch:** The system dynamically routes providers to either `Puppeteer` (Direct retail) or `Cheerio` (Aggregator) based on the database `scraping_type`.
-- **Critical Vendor Fallback:** For high-impact providers (e.g., Malabar Gold), the scraper MUST attempt direct extraction first and automatically pivot to the `goldpriceqatar.com` aggregator if the primary source fails or returns partial data.
+- **Critical Vendor Fallback:** For high-impact providers (e.g., Malabar Gold), the scraper MUST attempt direct extraction first (using Tier 1 fast-path JSON API, cascading to Tier 2 interactive browser UI automation) and automatically pivot to the `goldpriceqatar.com` aggregator if direct extraction fails or returns partial data.
 - **Fail-Safe Notifications:** Every fallback event or primary extraction failure MUST trigger an immediate email notification to the administrator via `sendFallbackAlert`.
 
 ### Mobile Frontend

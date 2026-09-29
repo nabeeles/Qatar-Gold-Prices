@@ -49,8 +49,7 @@ async function runScraper() {
 const isPartial = prices && (!prices['24k'] || !prices['22k']);
 const isFallbackEligible = provider.name.includes('Malabar') || 
                            provider.name.includes('Al Fardan') || 
-                           provider.name.includes('Joyalukkas') || 
-                           provider.name.includes('Shine');
+                           provider.name.includes('Joyalukkas');
 
 if ((!prices || Object.keys(prices).length === 0 || isPartial) && isFallbackEligible) {
     console.log(`   [Info] ${provider.name} direct extraction is restricted or failed in this environment. Pivoting to high-fidelity aggregator...`);

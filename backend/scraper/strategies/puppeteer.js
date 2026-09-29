@@ -1,11 +1,80 @@
 const puppeteer = require('puppeteer');
 
 /**
+ * Direct API extraction for Malabar Gold rates (Tier 1 Fast-Path).
+ * Queries the official JSON pricing endpoint used by their regional web widget.
+ * @returns {Promise<{ '22k': string, '24k': string } | null>}
+ */
+async function fetchMalabarDirectApi() {
+  const endpoint = 'https://www.malabargoldanddiamonds.com/ae/malabarprice/index/getrates/?country=QA&state=Doha';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://www.malabargoldanddiamonds.com/ae/goldprice'
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !data['22kt'] || !data['24kt']) {
+      return null;
+    }
+
+    const parseRate = (val) => {
+      if (!val) return null;
+      const clean = val.replace(/,/g, '').replace(/[^\d.]/g, '');
+      const parsed = parseFloat(clean);
+      return !isNaN(parsed) && parsed > 300 && parsed < 1000 ? parsed.toFixed(2) : null;
+    };
+
+    const k22 = parseRate(data['22kt']);
+    const k24 = parseRate(data['24kt']);
+
+    if (k22 && k24) {
+      return { '22k': k22, '24k': k24 };
+    }
+
+    return null;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn(`   [Warn] Malabar direct API request failed: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Puppeteer Scraping Strategy
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
   
+  // --- STRATEGY: Malabar Gold (Tier 1 Fast-Path Direct Pricing API) ---
+  if (provider.name.includes('Malabar') && !provider.forceBrowserFallback) {
+    try {
+      console.log('   [Malabar] Attempting sub-second direct API extraction...');
+      const fastResult = await fetchMalabarDirectApi();
+      if (fastResult && fastResult['24k'] && fastResult['22k']) {
+        console.log('   ✅ [Malabar] Extracted directly via official pricing API:', fastResult);
+        return fastResult;
+      }
+      console.log('   [Malabar] Direct API unfulfilled, proceeding with browser automation fallback...');
+    } catch (apiErr) {
+      console.warn(`   [Warn] Malabar direct API failed: ${apiErr.message}`);
+    }
+  }
+
   const launchOptions = {
     headless: "new",
     args: [
@@ -37,42 +106,103 @@ async function scrapeWithPuppeteer(provider) {
         }
         
         // Stabilization debounce
-        const waitTime = provider.name.includes('Malabar') ? 25000 : 10000;
+        const waitTime = provider.name.includes('Malabar') ? 5000 : 10000;
         await new Promise(r => setTimeout(r, waitTime));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
 
-    // --- STRATEGY: Malabar Gold (Direct US-Path Extraction) ---
+    // --- STRATEGY: Malabar Gold (Tier 2 Interactive Browser Automation Fallback) ---
     if (provider.name.includes('Malabar')) {
         try {
-            // Dismiss any initial blocking elements
+            console.log('   [Malabar] Executing interactive browser automation fallback...');
+            
+            // Dismiss any initial blocking elements / modals
             await page.evaluate(() => {
-                const selectors = ['.modal-close', '.close-btn', 'button[aria-label="Close"]', '.close'];
+                const selectors = ['.modal-close', '.close-btn', 'button[aria-label="Close"]', '.close', '#onesignal-slidedown-cancel-button'];
                 selectors.forEach(s => document.querySelector(s)?.click());
             });
-            await new Promise(r => setTimeout(r, 5000));
-        } catch (e) {}
 
-        const extracted = await page.evaluate(() => {
-            const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
-            
-            // Search for Qatar specifically in the text (available on /us/ path)
-            const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
-                           bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
+            // Check if interactive gold-rate widget exists
+            const countrySelect = await page.$('#gold-country-list');
+            if (countrySelect) {
+                console.log('   [Malabar] Found interactive gold rate selector. Selecting Qatar (QA)...');
+                await page.select('#gold-country-list', 'QA');
 
-            if (qMatch) {
-                const v1 = parseFloat(qMatch[1]);
-                const v2 = parseFloat(qMatch[2]);
-                if (v1 > 400 && v2 > 400) {
-                    const vals = [v1, v2].sort((a,b) => a-b);
-                    return { '22k': vals[0].toFixed(2), '24k': vals[1].toFixed(2) };
+                // Wait for state list to be populated with Doha
+                await page.waitForFunction(() => {
+                    const stateSel = document.querySelector('#gold-state-list');
+                    return stateSel && Array.from(stateSel.options).some(o => o.value === 'Doha');
+                }, { timeout: 15000 });
+
+                console.log('   [Malabar] State list populated. Selecting Doha...');
+                await page.select('#gold-state-list', 'Doha');
+
+                // Click submit button
+                const submitBtn = await page.$('.gold-rate-btn') || await page.$('button.submit');
+                if (submitBtn) {
+                    await submitBtn.click();
                 }
-            }
-            return null;
-        });
 
-        if (extracted) return extracted;
+                // Wait for rates to render in the DOM
+                await page.waitForFunction(() => {
+                    const txt = document.body ? document.body.innerText : '';
+                    return txt.includes('QAR') && (txt.includes('22 Carat') || txt.includes('24 Carat') || txt.includes('Todays Gold Rate'));
+                }, { timeout: 15000 });
+            }
+
+            const extracted = await page.evaluate(() => {
+                const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
+                const res = {};
+
+                // Primary parsing matching widget labels
+                const k22Match = bodyTxt.match(/\(?22\s*(?:Carat|KT|K)?\s*Gold\)?\s*(\d+\.\d+)\s*QAR/i) ||
+                                 bodyTxt.match(/(\d+\.\d+)\s*QAR[^\d]+22/i);
+                const k24Match = bodyTxt.match(/\(?24\s*(?:Carat|KT|K)?\s*Gold\)?\s*(\d+\.\d+)\s*QAR/i) ||
+                                 bodyTxt.match(/(\d+\.\d+)\s*QAR[^\d]+24/i);
+
+                if (k22Match) res['22k'] = parseFloat(k22Match[1]).toFixed(2);
+                if (k24Match) res['24k'] = parseFloat(k24Match[1]).toFixed(2);
+
+                // Secondary regex searching for pairs of QAR prices
+                if (!res['22k'] || !res['24k']) {
+                    const matches = bodyTxt.match(/(\d{3}\.\d{2})\s*QAR/gi);
+                    if (matches && matches.length >= 2) {
+                        const vals = Array.from(new Set(matches.map(m => parseFloat(m.replace(/[^\d.]/g, '')))))
+                            .filter(v => v > 300 && v < 1000)
+                            .sort((a, b) => a - b);
+                        if (vals.length >= 2) {
+                            res['22k'] = vals[0].toFixed(2);
+                            res['24k'] = vals[1].toFixed(2);
+                        }
+                    }
+                }
+
+                // Tertiary fallback for static store table
+                if (!res['22k'] || !res['24k']) {
+                    const qMatch = bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+QAR\s+(\d+\.\d+)\s+QAR/i) || 
+                                   bodyTxt.match(/Qatar\s+(\d+\.\d+)\s+(\d+\.\d+)/i);
+                    if (qMatch) {
+                        const v1 = parseFloat(qMatch[1]);
+                        const v2 = parseFloat(qMatch[2]);
+                        if (v1 > 300 && v2 > 300) {
+                            const vals = [v1, v2].sort((a,b) => a-b);
+                            res['22k'] = vals[0].toFixed(2);
+                            res['24k'] = vals[1].toFixed(2);
+                        }
+                    }
+                }
+
+                return (res['22k'] && res['24k']) ? res : null;
+            });
+
+            if (extracted) {
+                console.log('   ✅ [Malabar] Extracted live rates via browser automation:', extracted);
+                return extracted;
+            }
+        } catch (domErr) {
+            console.warn(`   [Warn] Malabar browser extraction failed: ${domErr.message}`);
+        }
     }
 
     // --- STRATEGY: Al Fardan Exchange (Direct Product Extraction) ---
@@ -140,7 +270,7 @@ async function scrapeWithPuppeteer(provider) {
             return null;
         };
 
-        // --- STRATEGY: Dynamic Heuristic (Joyalukkas, Shine, etc.) ---
+        // --- STRATEGY: Dynamic Heuristic (Joyalukkas, etc.) ---
         const used = [];
         const k24 = findPrice('24 Karat', used) || findPrice('24KT', used) || findPrice('24K', used) || findPrice('24ct', used);
         if (k24) { res['24k'] = k24; used.push(k24); }
@@ -173,4 +303,4 @@ async function scrapeWithPuppeteer(provider) {
   }
 }
 
-module.exports = { scrapeWithPuppeteer };
+module.exports = { scrapeWithPuppeteer, fetchMalabarDirectApi };

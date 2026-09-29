@@ -1,4 +1,4 @@
-const { supabase } = require('./db');
+const { supabase } = require('../../backend/scraper/utils/db');
 
 /**
  * Administrative utility to orchestrate the migration and configuration of data providers.
@@ -33,7 +33,7 @@ async function migrate() {
   if (err2) console.error('[Migration] Failed to refine Al Fardan selectors:', err2.message);
   else console.log('✅ Al Fardan selectors standardized.');
 
-  // 3. Logic: Provisioning Malabar Gold as a primary regional data source with interactive state requirements.
+  // 3. Logic: Synchronize Malabar Gold to official regional goldprice endpoint.
   const { data: existingMalabar } = await supabase
     .from('providers')
     .select('id')
@@ -45,12 +45,23 @@ async function migrate() {
         .from('providers')
         .insert({
             name: 'Malabar Gold',
-            url: 'https://www.malabargoldanddiamonds.com/us/stores/qatar',
+            url: 'https://www.malabargoldanddiamonds.com/ae/goldprice',
             scraping_type: 'direct',
             selectors: { "24k": "24K", "22k": "22K", "interactive": true }
         });
       if (err3) console.error('[Migration] Failed to provision Malabar Gold:', err3.message);
       else console.log('✅ Malabar Gold provisioned successfully.');
+  } else {
+      const { error: err3 } = await supabase
+        .from('providers')
+        .update({
+            url: 'https://www.malabargoldanddiamonds.com/ae/goldprice',
+            scraping_type: 'direct',
+            selectors: { "24k": "24K", "22k": "22K", "interactive": true }
+        })
+        .eq('name', 'Malabar Gold');
+      if (err3) console.error('[Migration] Failed to update Malabar Gold:', err3.message);
+      else console.log('✅ Malabar Gold synchronized to /ae/goldprice endpoint.');
   }
 
   console.log('--- Administrative Migration Cycle Finished ---');
