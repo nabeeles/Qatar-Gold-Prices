@@ -168,7 +168,9 @@ async function scrapeWithPuppeteer(provider) {
                 if (!res['22k'] || !res['24k']) {
                     const matches = bodyTxt.match(/(\d{3}\.\d{2})\s*QAR/gi);
                     if (matches && matches.length >= 2) {
-                        const vals = matches.map(m => parseFloat(m.replace(/[^\d.]/g, ''))).filter(v => v > 300 && v < 1000).sort((a,b) => a-b);
+                        const vals = Array.from(new Set(matches.map(m => parseFloat(m.replace(/[^\d.]/g, '')))))
+                            .filter(v => v > 300 && v < 1000)
+                            .sort((a, b) => a - b);
                         if (vals.length >= 2) {
                             res['22k'] = vals[0].toFixed(2);
                             res['24k'] = vals[1].toFixed(2);
