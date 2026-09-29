@@ -140,7 +140,7 @@ async function scrapeWithPuppeteer(provider) {
             return null;
         };
 
-        // --- STRATEGY: Dynamic Heuristic (Joyalukkas, Shine, etc.) ---
+        // --- STRATEGY: Dynamic Heuristic (Joyalukkas, etc.) ---
         const used = [];
         const k24 = findPrice('24 Karat', used) || findPrice('24KT', used) || findPrice('24K', used) || findPrice('24ct', used);
         if (k24) { res['24k'] = k24; used.push(k24); }
