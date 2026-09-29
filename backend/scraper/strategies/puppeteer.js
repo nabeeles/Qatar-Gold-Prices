@@ -1,11 +1,80 @@
 const puppeteer = require('puppeteer');
 
 /**
+ * Direct API extraction for Malabar Gold rates (Tier 1 Fast-Path).
+ * Queries the official JSON pricing endpoint used by their regional web widget.
+ * @returns {Promise<{ '22k': string, '24k': string } | null>}
+ */
+async function fetchMalabarDirectApi() {
+  const endpoint = 'https://www.malabargoldanddiamonds.com/ae/malabarprice/index/getrates/?country=QA&state=Doha';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://www.malabargoldanddiamonds.com/ae/goldprice'
+      },
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !data['22kt'] || !data['24kt']) {
+      return null;
+    }
+
+    const parseRate = (val) => {
+      if (!val) return null;
+      const clean = val.replace(/,/g, '').replace(/[^\d.]/g, '');
+      const parsed = parseFloat(clean);
+      return !isNaN(parsed) && parsed > 300 && parsed < 1000 ? parsed.toFixed(2) : null;
+    };
+
+    const k22 = parseRate(data['22kt']);
+    const k24 = parseRate(data['24kt']);
+
+    if (k22 && k24) {
+      return { '22k': k22, '24k': k24 };
+    }
+
+    return null;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.warn(`   [Warn] Malabar direct API request failed: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Puppeteer Scraping Strategy
  */
 async function scrapeWithPuppeteer(provider) {
   console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
   
+  // --- STRATEGY: Malabar Gold (Tier 1 Fast-Path Direct Pricing API) ---
+  if (provider.name.includes('Malabar') && !provider.forceBrowserFallback) {
+    try {
+      console.log('   [Malabar] Attempting sub-second direct API extraction...');
+      const fastResult = await fetchMalabarDirectApi();
+      if (fastResult && fastResult['24k'] && fastResult['22k']) {
+        console.log('   ✅ [Malabar] Extracted directly via official pricing API:', fastResult);
+        return fastResult;
+      }
+      console.log('   [Malabar] Direct API unfulfilled, proceeding with browser automation fallback...');
+    } catch (apiErr) {
+      console.warn(`   [Warn] Malabar direct API failed: ${apiErr.message}`);
+    }
+  }
+
   const launchOptions = {
     headless: "new",
     args: [
@@ -173,4 +242,4 @@ async function scrapeWithPuppeteer(provider) {
   }
 }
 
-module.exports = { scrapeWithPuppeteer };
+module.exports = { scrapeWithPuppeteer, fetchMalabarDirectApi };
