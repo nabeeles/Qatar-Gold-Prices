@@ -7,7 +7,7 @@ This document details the methodologies, heuristics, and fail-safes used to sync
 ## 🤖 Orchestration: Dynamic Dispatch
 
 The scraper uses a tiered orchestration logic to balance accuracy and speed:
-1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Joyalukkas, Malabar) that utilize heavy JavaScript hydration or require regional interaction.
+1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Al Fardan, Joyalukkas, Malabar) that utilize heavy JavaScript hydration or require regional interaction.
 2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (GoodReturns, LivePriceOfGold) that provide fast, static HTML snapshots of the broader market.
 
 ---
@@ -42,6 +42,7 @@ For tabular data, the scraper maps header indices to data row indices dynamicall
 | :--- | :--- | :--- | :--- |
 | **Malabar Gold** | Direct | Store Locator | Primary: Official Store. Fallback: Aggregator. |
 | **Joyalukkas** | Direct | Regional Page | Requires browser hydration. |
+| **Al Fardan Exchange** | Direct | Store / Rates Page | Direct product extraction. |
 | **GoodReturns** | Aggregator | Market Feed | Very fast, high-reliability fallback. |
 | **LivePriceOfGold**| Aggregator | Market Feed | Global market sync. |
 
