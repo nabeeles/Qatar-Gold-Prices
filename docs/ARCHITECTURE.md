@@ -26,7 +26,7 @@ The **Qatar Gold Prices** project is a robust, privacy-first system designed to 
 
 ### 1. The Scraper (Backend)
 - **Engine Dispatch:** Dynamically routes tasks to **Puppeteer** (for heavy retail sites) or **Cheerio** (for lightweight aggregators) based on database metadata.
-- **Primary-with-Fallback:** For critical vendors (e.g., Malabar Gold), the scraper attempts a direct URL extraction first and automatically pivots to a verified aggregator if the primary source fails.
+- **Multi-Tier Robustness:** For critical vendors (e.g., Malabar Gold), the scraper executes a sub-second direct pricing API fast-path, cascades to interactive UI browser automation if needed, and maintains a verified aggregator fallback (`goldpriceqatar.com`) to guarantee continuous data availability.
 - **Health Monitoring:** A daily automated check verifies all data sources. Failures trigger immediate **SMTP Alerts** to the administrator.
 
 ### 2. The Cloud Layer (Supabase)

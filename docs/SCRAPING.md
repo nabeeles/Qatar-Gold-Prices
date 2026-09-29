@@ -12,12 +12,13 @@ The scraper uses a tiered orchestration logic to balance accuracy and speed:
 
 ---
 
-## 🛡️ Robustness: Primary-with-Fallback
+## 🛡️ Robustness: Multi-Tier Fail-Safe
 
-For critical market indicators (e.g., Malabar Gold), we implement a multi-stage fail-safe:
--   **Step 1 (Direct):** Attempt to scrape the official store locator page.
--   **Step 2 (Pivot):** If Step 1 times out or returns incomplete data, the system automatically pivots to a verified market aggregator (`goldpriceqatar.com`).
--   **Step 3 (Alert):** Upon successful fallback, an automated email is dispatched to the administrator to investigate the primary source health.
+For critical market indicators (e.g., Malabar Gold), we implement an intelligent 3-tier extraction architecture:
+-   **Tier 1 (Fast-Path Direct Pricing API):** Sub-second extraction querying the official regional pricing endpoint (`POST /ae/malabarprice/index/getrates/?country=QA&state=Doha`). Operates in `< 400ms` with zero browser/RAM overhead.
+-   **Tier 2 (Interactive UI Automation):** If the direct API fails or is restricted, Puppeteer navigates to `https://www.malabargoldanddiamonds.com/ae/goldprice`, dismisses overlays, selects "Qatar" (`QA`) and "Doha", triggers the rate submission, and parses live DOM values.
+-   **Tier 3 (Aggregator Failover):** If direct extraction fails or returns partial data, the system automatically pivots to a verified market aggregator (`goldpriceqatar.com`).
+-   **Alerts:** Primary extraction failures or fallback events trigger an automated email to the administrator to investigate provider health.
 
 ---
 
@@ -40,7 +41,7 @@ For tabular data, the scraper maps header indices to data row indices dynamicall
 
 | Provider | Method | URL Type | Notes |
 | :--- | :--- | :--- | :--- |
-| **Malabar Gold** | Direct | Store Locator | Primary: Official Store. Fallback: Aggregator. |
+| **Malabar Gold** | Direct (API + Interactive DOM) | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
 | **Joyalukkas** | Direct | Regional Page | Requires browser hydration. |
 | **Al Fardan Exchange** | Direct | Store / Rates Page | Direct product extraction. |
 | **GoodReturns** | Aggregator | Market Feed | Very fast, high-reliability fallback. |
