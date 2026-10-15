@@ -1,5 +1,6 @@
 const { supabase } = require('./db');
 const { Expo } = require('expo-server-sdk');
+const { formatAlertPrice } = require('./validation');
 
 // Initialize the Expo SDK for mobile push orchestration
 let expo = new Expo();
@@ -50,7 +51,9 @@ async function checkAndSendAlerts(latestPrices) {
     if (alert.condition === 'above' && currentPrice >= alert.target_price) triggered = true;
 
     if (triggered) {
-      console.log(`🔔 Market Threshold Reached [User: ${alert.user_id}]: ${alert.karat}K at ${currentPrice} (Target: ${alert.target_price})`);
+      const formattedCurrent = formatAlertPrice(currentPrice);
+      const formattedTarget = formatAlertPrice(alert.target_price);
+      console.log(`🔔 Market Threshold Reached [User: ${alert.user_id}]: ${alert.karat}K at ${formattedCurrent} (Target: ${formattedTarget})`);
       
       // Identity Verification: Ensure device token is valid before dispatch
       if (!Expo.isExpoPushToken(alert.expo_push_token)) {
@@ -62,8 +65,8 @@ async function checkAndSendAlerts(latestPrices) {
         to: alert.expo_push_token,
         sound: 'default',
         title: '💰 Gold Price Alert!',
-        body: `${alert.karat}K Gold is now QAR ${currentPrice}. This matches your target of ${alert.target_price}!`,
-        data: { karat: alert.karat, price: currentPrice },
+        body: `${alert.karat}K Gold is now QAR ${formattedCurrent}. This matches your target of QAR ${formattedTarget}!`,
+        data: { karat: alert.karat, price: Number(formattedCurrent) },
       });
 
       // Operational Update: Mark threshold as processed to prevent redundant dispatch

@@ -7,8 +7,8 @@ This document describes how to set up the project for local development and depl
 ## 🏗️ Prerequisites
 
 Ensure you have the following installed:
-- [Node.js](https://nodejs.org/) (v18+)
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+- [Node.js](https://nodejs.org/) (v24+ recommended)
+- [npm](https://www.npmjs.com/)
 - [Expo CLI](https://docs.expo.dev/get-started/installation/)
 - [Supabase CLI](https://supabase.com/docs/guides/cli) (optional, for local DB development)
 
@@ -29,26 +29,25 @@ EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
-### 3. Start Development Server
+### 3. Run Unit Tests & Type Check
+```bash
+cd app
+npm test
+npx tsc --noEmit
+```
+
+### 4. Start Development Server
 ```bash
 npx expo start
 ```
-> **Note:** Push notifications and some specific device features require a **Development Build**. To create one, use EAS:
-> ```bash
-> eas build --profile development --platform android
-> ```
 
-### 4. Build for Android (APK)
-To create an installable APK for testing:
+### 5. Build for Android (Local APK via EAS)
+Per project mandates, production APKs are built locally using `--local` with environment variables explicitly exported in the shell:
 ```bash
-eas build --platform android --profile preview
+export EXPO_PUBLIC_SUPABASE_URL="your_supabase_url"
+export EXPO_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key"
+npx eas build --local -p android --profile production
 ```
-
-> **CRITICAL:** Standalone builds require environment variables to be set in EAS. If your build crashes on startup, ensure you've run:
-> ```bash
-> eas env:create --name EXPO_PUBLIC_SUPABASE_URL --value "your_url" --environment preview --visibility plaintext
-> eas env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "your_key" --environment preview --visibility secret
-> ```
 
 ---
 
@@ -65,56 +64,43 @@ Create a `.env` file in the `backend/` directory:
 ```env
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+EMAIL_USER=your_gmail_address
+EMAIL_PASS=your_gmail_app_password
+NOTIFICATION_EMAIL=admin_recipient_email
 ```
 
-### 3. Run Scraper Manually
+### 3. Run Unit Tests
 ```bash
-# Navigate to backend and run the orchestrator
+cd backend
+npm test
+```
+
+### 4. Run Scraper or Health Check Manually
+```bash
 cd backend
 node scraper/index.js
-```
-
-### 4. Run Administrative Scripts (Archived)
-To re-initialize providers or migrate policies:
-```bash
-# From project root
-node scripts/admin/migrate_providers.js
+node scraper/health-check.js
 ```
 
 ---
 
 ## 🚀 Deployment & CI/CD
 
-### GitHub Actions (Scraper Cron)
-The scraper is deployed using GitHub Actions. The workflow is located in `.github/workflows/scrape-prices.yml`.
+### GitHub Actions (Scraper Cron & Health Check)
+The automated workflows are located in `.github/workflows/scrape-prices.yml` (hourly at `0 * * * *`) and `.github/workflows/health-check.yml` (daily at `0 8 * * *`).
 
-To enable it, add the following secrets to your GitHub repository:
+Configure the following repository secrets in GitHub:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-
-The cron job is set to run periodically (e.g., every 4 hours):
-```yaml
-on:
-  schedule:
-    - cron: '0 */4 * * *' # Every 4 hours
-```
-
-### EAS Build (App)
-The app is built and deployed using Expo Application Services (EAS).
-- Configure your project: `eas build:configure`
-- Build for production: `eas build --platform android --profile production`
-- Submit to Play Store: `eas submit --platform android`
+- `EMAIL_USER`
+- `EMAIL_PASS`
+- `NOTIFICATION_EMAIL`
 
 ---
 
 ## 🛠️ Supabase Configuration
 
 ### Initializing the Database
-You can find the database schema in `backend/supabase_schema.sql`. Use the Supabase SQL Editor to run this script to set up the tables (`providers`, `gold_prices`, `price_alerts`) and the appropriate RLS policies.
-
-### Adding Initial Providers
-After creating the tables, ensure you add at least one active provider to the `providers` table to test the scraper:
-```sql
-INSERT INTO providers (name, url, is_active)
-VALUES ('LivePriceOfGold', 'https://www.livepriceofgold.com/Qatar-gold-price.html', true);
-```
+Run the following SQL scripts in the Supabase SQL Editor:
+1. `backend/supabase_schema.sql`: Creates the `providers` and `gold_prices` tables, composite index `idx_gold_prices_provider_karat_time`, RLS policies, and seeds the default providers (`Al Fardan Exchange`, `Joyalukkas`, `Malabar Gold`, `GoodReturns Aggregator`, and `Shine Jewelers`).
+2. `backend/price_alerts_schema.sql`: Creates the `price_alerts` table (`user_id`, `expo_push_token`, `karat`, `target_price`, `condition`, `is_active`) and enforces per-user RLS policies (`auth.uid() = user_id`). Ensure **Anonymous Sign-Ins** are enabled in your Supabase Auth settings.

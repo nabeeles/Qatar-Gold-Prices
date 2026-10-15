@@ -17,27 +17,27 @@ A comprehensive security and privacy audit was conducted on the repository codeb
 *   **Vulnerability:** Disabled Browser Sandbox
 *   **Vulnerability Type:** Security
 *   **Severity:** Medium (FIXED)
-*   **Location:** `backend/scraper/strategies/puppeteer.js` (Line 24)
-*   **Status:** Resolved (Remediated on April 18, 2026)
+*   **Location:** `backend/scraper/strategies/puppeteer.js` (`launchScraperBrowser`)
+*   **Status:** Resolved (Remediated on October 15, 2026)
 
 #### Description
-The Puppeteer browser instance was previously launched with the `--no-sandbox` and `--disable-setuid-sandbox` flags. This has been remediated by removing these flags and configuring the execution environment (GitHub Actions) to support the Chromium sandbox.
+The Puppeteer browser instance was previously launched unconditionally with the `--no-sandbox` and `--disable-setuid-sandbox` flags. This has been remediated in `launchScraperBrowser()` so that the Chromium sandbox remains enabled by default in local and standard environments, and `--no-sandbox` is only appended when explicitly running inside a restricted container environment (`CI=true` or `PUPPETEER_NO_SANDBOX=true`).
 
 ### VULN-002: Insecure Row Level Security (RLS) Policy
 *   **Vulnerability:** Broken Access Control (Anonymous Table Insertion)
 *   **Vulnerability Type:** Security
 *   **Severity:** High (FIXED)
-*   **Location:** `backend/price_alerts_schema.sql` (Lines 25-28)
+*   **Location:** `backend/price_alerts_schema.sql` (Lines 25-29)
 *   **Status:** Resolved (Remediated on April 20, 2026)
 
 #### Description
-The RLS policy "Allow anonymous alert insertion" was removed. Anonymous users are now strictly governed by the "Users can manage their own alerts" policy, which utilizes `(select auth.uid())` for secure, performant identity verification.
+The RLS policy "Allow anonymous alert insertion" was removed. Authenticated sessions (including Supabase Anonymous Sign-ins) are strictly governed by the "Users can manage their own alerts" policy, which utilizes `(select auth.uid()) = user_id` for `SELECT`, `INSERT`, `UPDATE`, and `DELETE`.
 
 ### VULN-003: PII Leak in Execution Logs
 *   **Vulnerability:** Privacy Violation (Plaintext Push Token Logging)
 *   **Vulnerability Type:** Privacy
 *   **Severity:** Medium (FIXED)
-*   **Location:** `backend/scraper/utils/alerts.js` (Line 52)
+*   **Location:** `backend/scraper/utils/alerts.js`
 *   **Status:** Resolved (Remediated on April 20, 2026)
 
 #### Description
@@ -49,10 +49,9 @@ Raw Expo Push Tokens were previously logged in plaintext during validation error
 The audit followed a two-pass "Recon & Investigate" model. The following potential issues were investigated and ruled out:
 
 1.  **Unsafe URL Handling (`app/components/ExternalLink.tsx`):** Use of `WebBrowser.openBrowserAsync()` was checked for URI scheme injection. All current usages involve hardcoded `https://` documentation links.
-2.  **Public Key Exposure (`backend/test_security.js`):** The presence of `supabaseAnonKey` was noted. This is confirmed to be a public publishable key intended for client-side use and does not grant administrative database access.
-3.  **Database RPC Usage (`backend/scraper/utils/fix_policy.js`):** The use of a custom `execute_sql` RPC was verified to be for one-off internal configuration scripts using static, non-user-controlled input.
+2.  **Historical Diagnostic Scripts:** Legacy one-off diagnostic scripts (`backend/test_security.js` and `backend/scraper/utils/fix_policy.js`) were audited and removed from the repository.
 
 ---
 
-## 4. Remediation Plan
-A detailed fix plan is being developed to address the identified vulnerability without disrupting the scraping service.
+## 4. Remediation Summary
+All three identified findings (`VULN-001`, `VULN-002`, and `VULN-003`) have been remediated and verified via automated unit tests in `backend/scraper/tests/validation_and_alerts.test.js`.

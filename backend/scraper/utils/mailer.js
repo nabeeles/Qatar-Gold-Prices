@@ -50,38 +50,75 @@ async function sendHealthAlert(failureHtmlList) {
 }
 
 /**
- * Sends an alert when a primary source fails and the system successfully uses a fallback.
+ * Builds the subject, plain-text summary, and escaped HTML body for fallback / primary failure emails.
  * @param {string} providerName - Name of the provider.
- * @param {string} error - The primary error that triggered the fallback.
+ * @param {string} errorReason - The primary error that triggered the fallback or total failure.
+ * @param {boolean} fallbackSucceeded - Whether the fallback aggregator succeeded.
  */
-async function sendFallbackAlert(providerName, error) {
-  if (!process.env.NOTIFICATION_EMAIL) return;
+function buildFallbackEmailContent(providerName, errorReason, fallbackSucceeded = true) {
+  const sanitizedProvider = escapeHTML(String(providerName || 'Unknown Provider'));
+  const sanitizedError = escapeHTML(String(errorReason || 'Unknown error'));
 
-  const sanitizedProvider = escapeHTML(providerName);
-  const sanitizedError = escapeHTML(error);
+  if (fallbackSucceeded) {
+    return {
+      subject: `⚠️ [Qatar Gold] Fallback Activated for ${sanitizedProvider}`,
+      text: `Primary extraction failed for '${providerName}'. Reason: ${errorReason}. Fallback to 'goldpriceqatar.com' succeeded.`,
+      html: `
+        <h2>Primary Source Failure - Fallback Utilized</h2>
+        <p>The scraper for <b>${sanitizedProvider}</b> failed to reach its primary direct source.</p>
+        <p><b>Primary Error:</b> ${sanitizedError}</p>
+        <p>✅ <b>Action Taken:</b> Fallback to 'goldpriceqatar.com' succeeded and market data was synchronized.</p>
+        <p>No immediate action is required, but you may want to check if the primary URL or website structure has changed.</p>
+        <br/>
+        <hr/>
+        <p><small>Automated Message from Qatar Gold Price Backend</small></p>
+      `,
+    };
+  }
 
-  const mailOptions = {
-    from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
-    to: process.env.NOTIFICATION_EMAIL,
-    subject: `⚠️ Gold Scraper Fallback: ${sanitizedProvider}`,
+  return {
+    subject: `🚨 [Qatar Gold] CRITICAL: Extraction Failed for ${sanitizedProvider}`,
+    text: `Both primary and fallback extraction failed for '${providerName}'. Reason: ${errorReason}. Immediate investigation required.`,
     html: `
-      <h2>Primary Source Failure - Fallback Utilized</h2>
-      <p>The scraper for <b>${sanitizedProvider}</b> failed to reach its primary direct source.</p>
-      <p><b>Primary Error:</b> ${sanitizedError}</p>
-      <p>✅ <b>Action Taken:</b> The system successfully retrieved market data using the aggregator fail-safe.</p>
-      <p>No immediate action is required, but you may want to check if the primary URL or website structure has changed.</p>
+      <h2>Critical Provider Failure - Primary &amp; Fallback Failed</h2>
+      <p>Both primary and fallback extraction failed for <b>${sanitizedProvider}</b>.</p>
+      <p><b>Error Details:</b> ${sanitizedError}</p>
+      <p>❌ <b>Action Required:</b> Immediate investigation required. No prices were recorded for this provider in the current run.</p>
       <br/>
       <hr/>
       <p><small>Automated Message from Qatar Gold Price Backend</small></p>
     `,
   };
+}
+
+/**
+ * Sends an alert when a primary source fails and the system either uses a fallback or fails completely.
+ * @param {string} providerName - Name of the provider.
+ * @param {string} error - The primary error that triggered the fallback.
+ * @param {boolean} fallbackSucceeded - Whether fallback extraction succeeded.
+ */
+async function sendFallbackAlert(providerName, error, fallbackSucceeded = true) {
+  if (!process.env.NOTIFICATION_EMAIL) {
+    console.warn('[Mailer] NOTIFICATION_EMAIL not set, skipping fallback alert.');
+    return;
+  }
+
+  const content = buildFallbackEmailContent(providerName, error, fallbackSucceeded);
+
+  const mailOptions = {
+    from: `"Qatar Gold Scraper" <${process.env.EMAIL_USER}>`,
+    to: process.env.NOTIFICATION_EMAIL,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+  };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`[Mailer] Fallback alert sent for ${providerName}`);
+    console.log(`[Mailer] Fallback alert sent for ${providerName} (fallbackSucceeded=${fallbackSucceeded})`);
   } catch (err) {
     console.error('[Mailer] Failed to send fallback alert:', err.message);
   }
 }
 
-module.exports = { sendHealthAlert, sendFallbackAlert, escapeHTML };
+module.exports = { sendHealthAlert, sendFallbackAlert, buildFallbackEmailContent, escapeHTML };

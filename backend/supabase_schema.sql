@@ -35,15 +35,30 @@ comment on column gold_prices.karat is 'The purity level of the gold record (24,
 comment on column gold_prices.price is 'The spot price per gram in Qatari Riyals.';
 comment on column gold_prices.scraped_at is 'The precise timestamp of the market synchronization event.';
 
+-- 3b. Performance Indexes for Mobile Queries
+create index if not exists idx_gold_prices_scraped_at
+  on gold_prices (scraped_at desc);
+
+create index if not exists idx_gold_prices_karat_scraped_at
+  on gold_prices (karat, scraped_at desc);
+
+create index if not exists idx_gold_prices_provider_karat_scraped_at
+  on gold_prices (provider_id, karat, scraped_at desc);
+
 -- 4. Enable Row Level Security (RLS)
 alter table providers enable row level security;
 alter table gold_prices enable row level security;
 
 -- 5. RLS Policies for 'providers' table
--- Scraper (service_role) has full access (bypasses RLS by default in Supabase)
--- Mobile App (authenticated users) should NOT see provider configs/selectors
-create policy "No public/app access to providers"
+-- Authenticated sessions (including Anonymous Sign-ins) can read active provider metadata for price joins
+create policy "Authenticated users can read active providers"
   on providers for select
+  to authenticated
+  using (is_active = true);
+
+create policy "Unauthenticated users cannot read providers"
+  on providers for select
+  to anon
   using (false);
 
 -- 6. RLS Policies for 'gold_prices' table

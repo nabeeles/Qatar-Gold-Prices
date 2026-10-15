@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { isValidGoldPrice, normalizePriceMap } = require('../utils/validation');
 
 /**
  * Cheerio Scraping Strategy
@@ -10,7 +11,7 @@ async function scrapeWithCheerio(provider) {
     const { data: html } = await axios.get(provider.url, {
         timeout: 30000,
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
         }
     });
     
@@ -34,21 +35,22 @@ async function scrapeWithCheerio(provider) {
             if (text.includes('1 Gram') && cells.length >= 3) {
                 const p22 = $(cells[1]).text().replace(/[^0-9.]/g, '');
                 const p24 = $(cells[2]).text().replace(/[^0-9.]/g, '');
-                if (parseFloat(p22) > 300) results['22k'] = p22;
-                if (parseFloat(p24) > 300) results['24k'] = p24;
+                if (isValidGoldPrice(p22)) results['22k'] = p22;
+                if (isValidGoldPrice(p24)) results['24k'] = p24;
             }
             
             if (text.includes('18K Gold') && cells.length >= 2) {
                 const p18 = $(cells[1]).text().replace(/[^0-9.]/g, '');
-                if (parseFloat(p18) > 300) results['18k'] = p18;
+                if (isValidGoldPrice(p18)) results['18k'] = p18;
             }
             if (text.includes('21K Gold') && cells.length >= 2) {
                 const p21 = $(cells[1]).text().replace(/[^0-9.]/g, '');
-                if (parseFloat(p21) > 300) results['21k'] = p21;
+                if (isValidGoldPrice(p21)) results['21k'] = p21;
             }
         });
         
-        if (Object.keys(results).length > 0) return results;
+        const validated = normalizePriceMap(results);
+        if (Object.keys(validated).length > 0) return validated;
     }
 
     /**
@@ -62,7 +64,7 @@ async function scrapeWithCheerio(provider) {
             if (cells.length >= 2) {
                 const price = $(cells[1]).text().trim().replace(/,/g, '');
                 const val = parseFloat(price);
-                if (val > 300 && val < 1000) {
+                if (isValidGoldPrice(val)) {
                     if (text.includes('24K')) results['24k'] = price;
                     else if (text.includes('22K')) results['22k'] = price;
                     else if (text.includes('21K')) results['21k'] = price;
@@ -70,7 +72,8 @@ async function scrapeWithCheerio(provider) {
                 }
             }
         });
-        if (Object.keys(results).length > 0) return results;
+        const validated = normalizePriceMap(results);
+        if (Object.keys(validated).length > 0) return validated;
     }
 
     /**
@@ -91,7 +94,7 @@ async function scrapeWithCheerio(provider) {
                 .map(n => n.replace(/,/g, ''))
                 .filter(n => {
                     const val = parseFloat(n);
-                    return val > 300 && val < 1000 && !assignedPrices.includes(n);
+                    return isValidGoldPrice(val) && !assignedPrices.includes(n);
                 });
 
             if (candidates.length > 0) {
@@ -104,14 +107,13 @@ async function scrapeWithCheerio(provider) {
     /**
      * Brand-Specific High-Fidelity Mapping
      */
-    const name = provider.name.toLowerCase();
     const brandPattern = new RegExp(`${provider.name.split(' ')[0]} is\\s*(\\d+(?:\\.\\d{1,2})?)`, 'i');
     const match = bodyText.match(brandPattern);
-    if (match) {
+    if (match && isValidGoldPrice(match[1])) {
         results['24k'] = match[1];
     }
 
-    // Apply General Heuristic for all categories (24k, 22k, 18k)
+    // Apply General Heuristic for all categories (24k, 22k, 21k, 18k)
     const used = Object.values(results).filter(v => !!v);
     
     if (!results['24k']) {
@@ -133,7 +135,7 @@ async function scrapeWithCheerio(provider) {
         results['18k'] = findPrice('18 Karat', used) || findPrice('18KT', used) || findPrice('18K', used) || findPrice('18ct', used);
     }
 
-    return results;
+    return normalizePriceMap(results);
   } catch (error) {
     console.error(`[Cheerio] Network or validation error for ${provider.name}:`, error.message);
     return null;

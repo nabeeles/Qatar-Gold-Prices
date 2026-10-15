@@ -30,3 +30,7 @@ create policy "Users can manage their own alerts"
 
 -- Unique constraint to prevent duplicate identical alerts for the same token/target
 alter table price_alerts add constraint unique_user_alert unique (user_id, karat, condition, target_price, expo_push_token);
+
+-- Index for fast user alert lookups and active alert checks
+create index if not exists idx_price_alerts_user_active
+  on price_alerts (user_id, is_active);

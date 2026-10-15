@@ -8,8 +8,8 @@ A premium, privacy-first mobile application to track real-time gold market data 
 
 - **📍 Resilient Scraping:** Dual-engine architecture (Puppeteer & Cheerio) with a **Direct-with-Fallback** safety net for critical providers like Malabar Gold.
 - **🛡️ Privacy-First Portfolio:** A secure, **Local-Only** vault to track your gold assets (Weight, Karat, Purchase Price). Your data never leaves your device.
-- **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 5 reliable local sources.
-- **📈 Performance Analytics:** Instant ROI and profit/loss calculation based on live market averages.
+- **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 4 reliable local sources.
+- **📈 Performance Analytics:** Instant ROI and profit/loss calculation based on live deduplicated market averages.
 - **⚡ Smart-Sync Entry:** Intelligent bi-directional calculation between "Total Price" and "Price per Gram."
 - **🔔 Proactive Alerts:** Custom target notifications and automated system health emails for administrators.
 
@@ -34,14 +34,21 @@ A premium, privacy-first mobile application to track real-time gold market data 
 
 - **[Architecture Overview](docs/ARCHITECTURE.md):** The robust system design and data sovereignty model.
 - **[Scraping Strategy](docs/SCRAPING.md):** Detailed heuristics and aggregator fail-safe logic.
-- **[Setup & Deployment](docs/SETUP.md):** Instructions for local EAS builds and environment injection.
+- **[API & Schema Reference](docs/API.md):** Supabase schema, RLS policies, and data hooks.
+- **[Setup & Deployment](docs/SETUP.md):** Instructions for local EAS builds, testing, and environment injection.
 - **[Security Audit](docs/SECURITY_AUDIT.md):** Remediated findings and dependency hardening report.
 
 ---
 
-## 🚀 Development Note
+## 🚀 Development & Testing
 
-Production builds are performed locally using **EAS Local** to ensure maximum stability.
+Run the automated test suites for both the mobile frontend and backend scraper:
+```bash
+npm --prefix app test
+npm --prefix backend test
+```
+
+Production builds are performed locally using **EAS Local** to ensure maximum stability:
 ```bash
 # Manual environment injection is required for local builds
 export EXPO_PUBLIC_SUPABASE_URL="your_url"

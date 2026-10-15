@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-10-15
+
+### Added
+- **Shared Financial & Date Utilities (`app/lib/format.ts`)**: Added `formatCurrency` (strictly formatting values to two decimal places) and `parseLocalDate` (preventing UTC midnight timezone shift on `YYYY-MM-DD` strings).
+- **Market Deduplication & Averaging (`app/lib/priceUtils.ts`)**: Added `deduplicateLatestPrices`, `computeMarketAverages`, and `getHistoricalCutoffIso` so Dashboard, Calculator, and Vault always evaluate the latest snapshot per `(provider_id, karat)`.
+- **Active Alerts Management**: Upgraded the Alerts screen with a `[24K, 22K, 21K, 18K]` purity pill selector and an Active Alerts list with one-tap deletion.
+- **Scraper Price & Hierarchy Validation (`backend/scraper/utils/validation.js`)**: Added `isValidPrice`, `validateKaratHierarchy` (`24K >= 22K >= 21K >= 18K`), and `sanitizeProviderPrices` to prevent corrupted DOM scrapes from entering the database.
+- **Automated Unit Test Suites**: Added unit test suites for both the mobile frontend (`npm --prefix app test`) and backend scraper (`npm --prefix backend test`).
+
+### Fixed
+- **Cold-Start Auth Gate**: Prevented premature unauthenticated query firing by gating root stack rendering on anonymous auth readiness (`isReady`) in `app/_layout.tsx`.
+- **Historical Chart Windowing**: Replaced fixed `limit(500)` with a date-bounded `.gte('timestamp', cutoffIso)` query in `useHistoricalPrices` so 30D and 90D charts display complete timelines.
+- **Vault Deletion Confirmation & Input Guardrails**: Added a confirmation dialog before deleting holdings and KeyboardAvoidingView wrappers on Calculator and Alerts screens.
+- **Browser Pooling & Alert Isolation**: Shared a single Puppeteer browser instance across providers during scrape/health-check runs, cached aggregator fallback results per run, and scoped push notifications to newly scraped prices.
+
+## [1.2.0] - 2026-09-29
+
+### Changed
+- **Provider Registry Streamlining**: Soft-deactivated Shine Jewelers in the provider registry (`is_active: false`) following vendor storefront migration dropping public gold rate tables, preserving historical records.
+- **Scraper Resilience & Multi-Tier Architecture**: Enhanced Malabar Gold extraction with a sub-second direct pricing API fast-path, interactive UI browser automation, and aggregator failover.
+- **Fail-Safe Orchestration**: Updated critical retail fallback eligibility list to focus on active retail vendors (Al Fardan Exchange, Joyalukkas, Malabar Gold).
+
 ## [1.1.0] - 2026-04-26
 
 ### Added

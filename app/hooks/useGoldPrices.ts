@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { deduplicateLatestPrices, getHistoricalCutoffIso } from '../lib/priceUtils';
 
 /**
  * Interface representing a gold market synchronization record.
@@ -37,11 +38,12 @@ export function useLatestPrices() {
           provider:providers!inner(name, is_active)
         `)
         .eq('provider.is_active', true)
-        .order('scraped_at', { ascending: false });
+        .order('scraped_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
 
-      return data as unknown as GoldPrice[];
+      return deduplicateLatestPrices((data as unknown as GoldPrice[]) || []);
     },
   });
 }
@@ -59,9 +61,12 @@ export function useHistoricalPrices(karat: number = 24) {
       }
       const { data, error } = await supabase
         .from('gold_prices')
-        .select('price, scraped_at')
+        .select('price, scraped_at, provider:providers!inner(name, is_active)')
         .eq('karat', karat)
-        .order('scraped_at', { ascending: true });
+        .eq('provider.is_active', true)
+        .gte('scraped_at', getHistoricalCutoffIso(35))
+        .order('scraped_at', { ascending: false })
+        .limit(5000);
 
       if (error) throw error;
 
@@ -77,10 +82,12 @@ export function useHistoricalPrices(karat: number = 24) {
           dailyMap[date].count += 1;
       });
 
-      return Object.values(dailyMap).map(day => ({
-          value: day.total / day.count,
-          timestamp: day.timestamp
-      }));
+      return Object.values(dailyMap)
+        .map(day => ({
+            value: day.total / day.count,
+            timestamp: day.timestamp
+        }))
+        .sort((a, b) => a.timestamp - b.timestamp);
     },
   });
 }

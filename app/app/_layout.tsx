@@ -42,7 +42,7 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        if (loaded) {
+        if (loaded || fontError) {
           // Attempt anonymous sign-in but don't let it crash the app if offline
           try {
             await signInAnonymously();
@@ -72,7 +72,7 @@ export default function RootLayout() {
     );
   }
 
-  if (!loaded && !fontError) {
+  if ((!loaded && !fontError) || !isReady) {
     return null;
   }
 

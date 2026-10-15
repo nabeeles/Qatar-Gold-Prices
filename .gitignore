@@ -7,5 +7,6 @@ build/
 .env
 scraping-test/*.png
 *.apk
+*.aab
 nanobanana-output/
 graphify-out/

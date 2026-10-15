@@ -3,6 +3,7 @@ import { FlatList, View, Text, RefreshControl, ActivityIndicator } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLatestPrices } from '../../hooks/useGoldPrices';
 import { PriceCard } from '../../components/PriceCard';
+import { formatCurrency } from '../../lib/format';
 import { TrendingUp } from 'lucide-react-native';
 
 /**
@@ -67,12 +68,12 @@ export default function Dashboard() {
         .flatMap(p => p.prices)
         .filter(p => p.karat === 24);
         
-      if (prices24k.length === 0) return "0.00";
+      if (prices24k.length === 0) return formatCurrency(0);
       const sum = prices24k.reduce((acc, curr) => acc + (Number(curr.price) || 0), 0);
-      return (sum / prices24k.length).toFixed(2);
+      return formatCurrency(sum / prices24k.length);
     } catch (err) {
       console.error('Error calculating 24k average:', err);
-      return "0.00";
+      return formatCurrency(0);
     }
   }, [groupedData]);
 

@@ -1,7 +1,8 @@
 const { getActiveProviders } = require('./utils/db');
-const { scrapeWithPuppeteer } = require('./strategies/puppeteer');
+const { scrapeWithPuppeteer, launchScraperBrowser } = require('./strategies/puppeteer');
 const { scrapeWithCheerio } = require('./strategies/cheerio');
 const { sendHealthAlert } = require('./utils/mailer');
+const { isFallbackEligible } = require('./utils/validation');
 const escapeHTML = require('escape-html');
 
 /**
@@ -12,9 +13,16 @@ async function runHealthCheck() {
   console.log('--- Starting Daily Provider Health Check ---');
   console.log('Time:', new Date().toISOString());
 
+  let sharedBrowser = null;
+
   try {
     const providers = await getActiveProviders();
     console.log(`Testing ${providers.length} active providers...`);
+
+    const hasDirectProviders = providers.some(p => p.scraping_type === 'direct');
+    if (hasDirectProviders) {
+      sharedBrowser = await launchScraperBrowser();
+    }
 
     const failureItems = [];
 
@@ -24,16 +32,16 @@ async function runHealthCheck() {
 
       try {
         if (provider.scraping_type === 'direct') {
-          result = await scrapeWithPuppeteer(provider);
+          result = await scrapeWithPuppeteer(provider, sharedBrowser);
         } else {
           result = await scrapeWithCheerio(provider);
         }
 
-        if (!result || Object.keys(result).length === 0 || (!result['24k'] && !result['22k'])) {
+        if (isFallbackEligible(result)) {
           const safeName = escapeHTML(provider.name);
-          const safeError = 'No valid price data returned';
+          const safeError = 'No valid or complete (24K + 22K) price data returned';
           failureItems.push(`<li><b>${safeName}</b>: ${safeError}</li>`);
-          console.warn(`   ❌ ${provider.name}: FAILED (Empty Result)`);
+          console.warn(`   ❌ ${provider.name}: FAILED (Empty or Partial Result)`);
         } else {
           console.log(`   ✅ ${provider.name}: OK`);
         }
@@ -56,6 +64,10 @@ async function runHealthCheck() {
   } catch (error) {
     console.error('CRITICAL SYSTEM ERROR during health check:', error.message);
     process.exit(1);
+  } finally {
+    if (sharedBrowser) {
+      await sharedBrowser.close().catch(() => {});
+    }
   }
 }
 

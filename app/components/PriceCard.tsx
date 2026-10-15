@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { GoldPrice } from '../hooks/useGoldPrices';
+import { formatCurrency } from '../lib/format';
 
 /**
  * Props for the PriceCard component.
@@ -58,8 +59,8 @@ export function PriceCard({ provider }: PriceCardProps) {
               {p.karat}K
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold' }}>
-                {p.price}
+              <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold' }}>
+                {formatCurrency(p.price)}
               </Text>
             </View>
             {index === 0 && (

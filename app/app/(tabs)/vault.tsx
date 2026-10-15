@@ -3,19 +3,9 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Modal, TextInput,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Briefcase, TrendingUp, TrendingDown, Trash2, Calendar, Info } from 'lucide-react-native';
 import { useVault } from '../../hooks/useVault';
+import { formatCurrency, parseLocalDate } from '../../lib/format';
 import { format } from 'date-fns';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-/**
- * Currency Formatter
- * Ensures consistent 2-decimal place display for all prices.
- */
-const formatCurrency = (value: number) => {
-  return new Intl.NumberFormat('en-QA', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
 
 /**
  * My Gold Screen Component
@@ -123,6 +113,17 @@ function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice
   const costBasis = (entry.price_per_gram || 0) * entry.weight;
   const gainLoss = currentValue - costBasis;
 
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete Asset',
+      `Are you sure you want to remove "${entry.label || `${entry.karat}K Gold`}" (${entry.weight}g) from your portfolio?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  };
+
   return (
     <View style={styles.assetCard}>
       <View style={styles.assetHeader}>
@@ -130,7 +131,7 @@ function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice
           <Text style={styles.assetLabel}>{entry.label || `${entry.karat}K Gold`}</Text>
           <Text style={styles.assetSubtext}>{entry.weight}g • {entry.karat}K</Text>
         </View>
-        <TouchableOpacity onPress={onDelete}>
+        <TouchableOpacity onPress={confirmDelete}>
           <Trash2 size={18} color="#666" />
         </TouchableOpacity>
       </View>
@@ -153,7 +154,7 @@ function AssetCard({ entry, currentPrice, onDelete }: { entry: any, currentPrice
       
       <View style={styles.assetFooter}>
         <Calendar size={12} color="#444" />
-        <Text style={styles.footerText}>Bought on {format(new Date(entry.purchase_date), 'MMM dd, yyyy')}</Text>
+        <Text style={styles.footerText}>Bought on {format(parseLocalDate(entry.purchase_date), 'MMM dd, yyyy')}</Text>
       </View>
     </View>
   );
@@ -212,7 +213,7 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
       karat,
       weight: w,
       price_per_gram: finalPricePerGram,
-      purchase_date: date.toISOString().split('T')[0],
+      purchase_date: format(date, 'yyyy-MM-dd'),
     });
 
     // Reset form

@@ -26,7 +26,7 @@
 - Consumes: `backend/scraper/utils/db.js` (`supabase` client with `SUPABASE_SERVICE_ROLE_KEY`)
 - Produces: `is_active: false` on the row where `name = 'Shine Jewelers'` in the `providers` table
 
-- [ ] **Step 1: Write verification script to inspect current Shine status**
+- [x] **Step 1: Write verification script to inspect current Shine status**
 
 Create `backend/scripts/verify_provider_status.js`:
 ```javascript
@@ -59,12 +59,12 @@ async function checkStatus() {
 checkStatus();
 ```
 
-- [ ] **Step 2: Run verification script to confirm current active state**
+- [x] **Step 2: Run verification script to confirm current active state**
 
 Run: `node backend/scripts/verify_provider_status.js`
 Expected: Output showing `is_active: true` and exiting with code 2 (`❌ Shine Jewelers is still active.`).
 
-- [ ] **Step 3: Write deactivation migration script**
+- [x] **Step 3: Write deactivation migration script**
 
 Create `backend/scripts/deactivate_shine.js`:
 ```javascript
@@ -92,12 +92,12 @@ async function deactivateShine() {
 deactivateShine();
 ```
 
-- [ ] **Step 4: Execute deactivation and verify status**
+- [x] **Step 4: Execute deactivation and verify status**
 
 Run: `node backend/scripts/deactivate_shine.js && node backend/scripts/verify_provider_status.js`
 Expected: Output displaying `✅ Successfully deactivated provider` followed by `✅ Shine Jewelers is deactivated.` (exit code 0).
 
-- [ ] **Step 5: Clean up one-off migration scripts and commit**
+- [x] **Step 5: Clean up one-off migration scripts and commit**
 
 Remove temporary migration scripts if desired, or retain in `scripts/admin/deactivate_shine.js`.
 ```bash
@@ -118,7 +118,7 @@ git commit -m "chore(database): deactivate Shine Jewelers provider in Supabase r
 - Consumes: `backend/scraper/utils/db.js` (`getActiveProviders`)
 - Produces: Fallback evaluation targeting only `Malabar`, `Al Fardan`, and `Joyalukkas`
 
-- [ ] **Step 1: Write unit test to verify fallback eligibility logic**
+- [x] **Step 1: Write unit test to verify fallback eligibility logic**
 
 Create `backend/test_fallback_filter.js`:
 ```javascript
@@ -139,7 +139,7 @@ assert.strictEqual(isFallbackEligible('GoodReturns Aggregator'), false);
 console.log('✅ Fallback eligibility logic test passed.');
 ```
 
-- [ ] **Step 2: Update `backend/scraper/index.js`**
+- [x] **Step 2: Update `backend/scraper/index.js`**
 
 In `backend/scraper/index.js`, lines 50-53:
 Replace:
@@ -156,7 +156,7 @@ const isFallbackEligible = provider.name.includes('Malabar') ||
                            provider.name.includes('Joyalukkas');
 ```
 
-- [ ] **Step 3: Update `backend/scraper/strategies/puppeteer.js`**
+- [x] **Step 3: Update `backend/scraper/strategies/puppeteer.js`**
 
 In `backend/scraper/strategies/puppeteer.js`, line 143:
 Update the comment:
@@ -164,11 +164,11 @@ Update the comment:
 // --- STRATEGY: Dynamic Heuristic (Joyalukkas, etc.) ---
 ```
 
-- [ ] **Step 4: Remove obsolete `scripts/admin/add_shine.js`**
+- [x] **Step 4: Remove obsolete `scripts/admin/add_shine.js`**
 
 Remove `scripts/admin/add_shine.js` which contained obsolete code referencing missing `./db`.
 
-- [ ] **Step 5: Run tests and syntax verification**
+- [x] **Step 5: Run tests and syntax verification**
 
 Run:
 ```bash
@@ -178,7 +178,7 @@ rm backend/test_fallback_filter.js
 ```
 Expected: All tests pass and syntax validation exits with code 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/scraper/index.js backend/scraper/strategies/puppeteer.js
@@ -198,7 +198,7 @@ git commit -m "feat(scraper): remove Shine Jewelers from fallback list and scrap
 - Consumes: Revised provider list
 - Produces: Accurate documentation reflecting 5 active providers (Al Fardan, Joyalukkas, Malabar Gold, LivePriceOfGold, GoodReturns)
 
-- [ ] **Step 1: Update `docs/SCRAPING.md`**
+- [x] **Step 1: Update `docs/SCRAPING.md`**
 
 In `docs/SCRAPING.md`:
 1. Under "1. Dynamic Engine Dispatching":
@@ -212,7 +212,7 @@ In `docs/SCRAPING.md`:
 3. Under "Heuristic Fallbacks":
    Remove `Shine` references in table mapping explanations.
 
-- [ ] **Step 2: Commit documentation changes**
+- [x] **Step 2: Commit documentation changes**
 
 ```bash
 git add docs/SCRAPING.md
@@ -232,7 +232,7 @@ git commit -m "docs: remove Shine Jewelers from scraping matrix and documentatio
 - Consumes: Live Supabase database, live external websites
 - Produces: 5 active providers synchronized, 0 health check failures
 
-- [ ] **Step 1: Run the provider health check**
+- [x] **Step 1: Run the provider health check**
 
 Run:
 ```bash
@@ -242,7 +242,7 @@ Expected output:
 - `Testing 5 active providers...` (Shine Jewelers must NOT be present in the active list)
 - Health check runs through the 5 remaining providers.
 
-- [ ] **Step 2: Run full scraper orchestrator**
+- [x] **Step 2: Run full scraper orchestrator**
 
 Run:
 ```bash
@@ -253,7 +253,7 @@ Expected output:
 - Al Fardan, Joyalukkas, LivePriceOfGold, Malabar Gold, and GoodReturns synchronize and save to database.
 - Process exits with code 0.
 
-- [ ] **Step 3: Verify mobile frontend TypeScript check**
+- [x] **Step 3: Verify mobile frontend TypeScript check**
 
 Run:
 ```bash
@@ -261,7 +261,7 @@ cd app && npx tsc --noEmit
 ```
 Expected output: 0 errors.
 
-- [ ] **Step 4: Final commit and summary**
+- [x] **Step 4: Final commit and summary**
 
 ```bash
 git status

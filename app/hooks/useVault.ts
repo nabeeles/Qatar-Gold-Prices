@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dbService, VaultEntry } from '../lib/db';
 import { useLatestPrices } from './useGoldPrices';
+import { computeMarketAverages } from '../lib/priceUtils';
 import { useSQLiteContext } from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
 
@@ -38,25 +39,17 @@ export function useVault() {
 
   /**
    * marketAverages (Computed)
-   * Aggregates the latest market data into a lookup map for instant valuation.
-   * Format: { [karat]: { total, count } }
+   * Aggregates the latest deduplicated market data into a lookup map for instant valuation.
+   * Format: { [karat]: averagePrice }
    */
-  const marketAverages = (latestPrices || []).reduce((acc, curr) => {
-    if (!acc[curr.karat]) {
-      acc[curr.karat] = { total: 0, count: 0 };
-    }
-    acc[curr.karat].total += curr.price;
-    acc[curr.karat].count += 1;
-    return acc;
-  }, {} as Record<number, { total: number; count: number }>);
+  const marketAverages = computeMarketAverages(latestPrices || []);
 
   /**
    * getAveragePrice
    * Utility to retrieve the mathematical mean for a specific gold purity.
    */
   const getAveragePrice = (karat: number) => {
-    const data = marketAverages[karat];
-    return data ? data.total / data.count : 0;
+    return marketAverages[karat] || 0;
   };
 
   /**

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHistoricalPrices } from '../../hooks/useGoldPrices';
+import { formatCurrency } from '../../lib/format';
 import { LineChart } from 'react-native-wagmi-charts';
 import { LineChart as ChartIcon, Calendar } from 'lucide-react-native';
 
@@ -56,6 +57,20 @@ export default function Trends() {
       return [];
     }
   }, [data, selectedTimeframe]);
+
+  const stats = useMemo(() => {
+    if (chartData.length === 0) {
+      return { current: 0, high: 0, low: 0, change: 0, percent: 0 };
+    }
+    const values = chartData.map(d => d.value);
+    const first = values[0];
+    const current = values[values.length - 1];
+    const high = Math.max(...values);
+    const low = Math.min(...values);
+    const change = current - first;
+    const percent = first > 0 ? (change / first) * 100 : 0;
+    return { current, high, low, change, percent };
+  }, [chartData]);
 
   if (isLoading) {
     return (
@@ -169,6 +184,24 @@ export default function Trends() {
               </View>
             )}
           </View>
+
+          {/* Period Summary Stats */}
+          {chartData.length > 0 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
+              <View style={{ flex: 1, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 16, padding: 12, marginRight: 8 }}>
+                <Text style={{ color: '#A0A0A0', fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Latest</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>{formatCurrency(stats.current)} QAR</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 16, padding: 12, marginHorizontal: 4 }}>
+                <Text style={{ color: '#A0A0A0', fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>High</Text>
+                <Text style={{ color: '#4ADE80', fontSize: 14, fontWeight: 'bold' }}>{formatCurrency(stats.high)} QAR</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 16, padding: 12, marginLeft: 8 }}>
+                <Text style={{ color: '#A0A0A0', fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Low</Text>
+                <Text style={{ color: '#F87171', fontSize: 14, fontWeight: 'bold' }}>{formatCurrency(stats.low)} QAR</Text>
+              </View>
+            </View>
+          )}
 
           {/* Market Context Info */}
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 32 }}>

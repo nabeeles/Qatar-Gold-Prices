@@ -4,54 +4,57 @@ This document details the methodologies, heuristics, and fail-safes used to sync
 
 ---
 
-## 🤖 Orchestration: Dynamic Dispatch
+## 🤖 Orchestration: Dynamic Dispatch & Browser Pooling
 
 The scraper uses a tiered orchestration logic to balance accuracy and speed:
-1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Al Fardan, Joyalukkas, Malabar) that utilize heavy JavaScript hydration or require regional interaction.
-2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (GoodReturns, LivePriceOfGold) that provide fast, static HTML snapshots of the broader market.
+1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Al Fardan Exchange, Joyalukkas, Malabar Gold) that utilize heavy JavaScript hydration or require regional interaction. A single shared headless Chromium instance (`launchScraperBrowser`) is pooled across all direct providers in a run, with isolated browser pages per provider.
+2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (`goldpriceqatar.com` / GoodReturns Aggregator) that provide fast, static HTML snapshots of the broader market.
 
 ---
 
 ## 🛡️ Robustness: Multi-Tier Fail-Safe
 
-For critical market indicators (e.g., Malabar Gold), we implement an intelligent 3-tier extraction architecture:
--   **Tier 1 (Fast-Path Direct Pricing API):** Sub-second extraction querying the official regional pricing endpoint (`POST /ae/malabarprice/index/getrates/?country=QA&state=Doha`). Operates in `< 400ms` with zero browser/RAM overhead.
--   **Tier 2 (Interactive UI Automation):** If the direct API fails or is restricted, Puppeteer navigates to `https://www.malabargoldanddiamonds.com/ae/goldprice`, dismisses overlays, selects "Qatar" (`QA`) and "Doha", triggers the rate submission, and parses live DOM values.
--   **Tier 3 (Aggregator Failover):** If direct extraction fails or returns partial data, the system automatically pivots to a verified market aggregator (`goldpriceqatar.com`).
--   **Alerts:** Primary extraction failures or fallback events trigger an automated email to the administrator to investigate provider health.
+For critical market indicators (Al Fardan Exchange, Joyalukkas, Malabar Gold), we implement an intelligent 3-tier extraction architecture:
+-   **Tier 1 (Fast-Path Direct Pricing API):** For Malabar Gold, sub-second extraction queries the official regional pricing endpoint (`POST /ae/malabarprice/index/getrates/?country=QA&state=Doha`). Operates in `< 400ms` with zero browser overhead.
+-   **Tier 2 (Interactive UI Automation):** If the direct API fails or is not applicable, Puppeteer navigates to the provider storefront, dismisses overlays, selects regional settings ("Qatar" / "Doha"), and parses live DOM values.
+-   **Tier 3 (Cached Aggregator Failover):** If direct extraction fails or returns partial data, the system automatically pivots to the verified market aggregator (`goldpriceqatar.com`), caching the fallback snapshot in memory so multiple fallbacks in a single run only make one HTTP request.
+-   **Fail-Safe Notifications:** Every fallback event or primary extraction failure triggers an immediate email notification to the administrator via `sendFallbackAlert`.
 
 ---
 
-## 🔍 Extraction Heuristics
+## 🔍 Extraction Heuristics & Validation
 
-To handle frequent website structural changes without constant code maintenance, the scraper employs the following heuristics:
+To handle frequent website structural changes without constant code maintenance, the scraper employs the following heuristics and validation gates (`backend/scraper/utils/validation.js`):
 
 ### 1. Sequential Label Scanning
-Instead of relying on fragile CSS selectors (e.g., `.price-value`), the engine scans for "Anchors" (24K, 22K, 18K) and then evaluates the immediate textual surroundings for:
+Instead of relying on fragile CSS selectors (e.g., `.price-value`), the engine scans for "Anchors" (24K, 22K, 21K, 18K) and then evaluates the immediate textual surroundings for:
 -   **Currency Tokens:** Matches strings containing `QAR` or `﷼`.
 -   **Decimal Precision:** Prioritizes values with `.` (e.g., `552.50`) to avoid picking up store counts or years.
--   **Market Range Validation:** Discards any value outside the realistic range of `100` to `2000` QAR per gram.
+-   **Market Range Validation (`isValidPrice`):** Discards any value outside the realistic range of `100` to `2000` QAR per gram.
 
-### 2. Multi-Column Mapping
+### 2. Monotonic Purity Hierarchy (`validateKaratHierarchy`)
+Before any provider's extracted rates are accepted, `sanitizeProviderPrices` verifies that all present karats obey strict monotonic ordering (`24K >= 22K >= 21K >= 18K`). If a corrupted DOM scrape violates this hierarchy, the extraction is rejected and the orchestrator triggers the fallback/alert workflow.
+
+### 3. Multi-Column Mapping
 For tabular data, the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned.
 
 ---
 
 ## 📊 Provider Registry
 
-| Provider | Method | URL Type | Notes |
-| :--- | :--- | :--- | :--- |
-| **Malabar Gold** | Direct (API + Interactive DOM) | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
-| **Joyalukkas** | Direct | Regional Page | Requires browser hydration. |
-| **Al Fardan Exchange** | Direct | Store / Rates Page | Direct product extraction. |
-| **GoodReturns** | Aggregator | Market Feed | Very fast, high-reliability fallback. |
-| **LivePriceOfGold**| Aggregator | Market Feed | Global market sync. |
+| Provider | `scraping_type` | Status | URL Type | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Malabar Gold** | `puppeteer` | Active | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
+| **Joyalukkas** | `puppeteer` | Active | Regional Page | Requires browser hydration; aggregator fallback enabled. |
+| **Al Fardan Exchange** | `puppeteer` | Active | Store / Rates Page | Direct product extraction (`24K`); aggregator fallback enabled. |
+| **GoodReturns Aggregator** | `cheerio` | Active | Market Feed (`goldpriceqatar.com`) | Fast, high-reliability market feed and fallback source. |
+| **Shine Jewelers** | `puppeteer` | Inactive | Storefront | Soft-deactivated (`is_active: false`) to preserve historical data. |
 
 ---
 
 ## 🏥 Health & Monitoring
 
-The system is self-monitoring via a daily **Provider Health Check**:
+The system is self-monitoring via a daily **Provider Health Check** (`backend/scraper/health-check.js`):
 -   **Trigger:** GitHub Actions (Daily at 8:00 AM UTC).
--   **Logic:** Executes a test extraction for every active provider.
--   **Alerts:** Sends a consolidated failure report via **Nodemailer/SMTP** if any data source becomes unreachable.
+-   **Logic:** Executes a test extraction for every active provider using a shared Puppeteer browser instance and validates extracted prices.
+-   **Alerts:** Sends a consolidated HTML-escaped failure report via **Nodemailer/SMTP** if any data source becomes unreachable or fails validation, and exits with a non-zero status code so CI surfaces the failure.

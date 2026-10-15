@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const { MIN_VALID_PRICE, MAX_VALID_PRICE, isValidGoldPrice, normalizePriceMap } = require('../utils/validation');
 
 /**
  * Direct API extraction for Malabar Gold rates (Tier 1 Fast-Path).
@@ -34,9 +35,9 @@ async function fetchMalabarDirectApi() {
 
     const parseRate = (val) => {
       if (!val) return null;
-      const clean = val.replace(/,/g, '').replace(/[^\d.]/g, '');
+      const clean = String(val).replace(/,/g, '').replace(/[^\d.]/g, '');
       const parsed = parseFloat(clean);
-      return !isNaN(parsed) && parsed > 300 && parsed < 1000 ? parsed.toFixed(2) : null;
+      return isValidGoldPrice(parsed) ? parsed.toFixed(2) : null;
     };
 
     const k22 = parseRate(data['22kt']);
@@ -55,34 +56,18 @@ async function fetchMalabarDirectApi() {
 }
 
 /**
- * Puppeteer Scraping Strategy
+ * Launches a shared or standalone Puppeteer browser instance.
+ * Only disables Chromium sandboxing when running in CI or explicitly requested.
  */
-async function scrapeWithPuppeteer(provider) {
-  console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
-  
-  // --- STRATEGY: Malabar Gold (Tier 1 Fast-Path Direct Pricing API) ---
-  if (provider.name.includes('Malabar') && !provider.forceBrowserFallback) {
-    try {
-      console.log('   [Malabar] Attempting sub-second direct API extraction...');
-      const fastResult = await fetchMalabarDirectApi();
-      if (fastResult && fastResult['24k'] && fastResult['22k']) {
-        console.log('   ✅ [Malabar] Extracted directly via official pricing API:', fastResult);
-        return fastResult;
-      }
-      console.log('   [Malabar] Direct API unfulfilled, proceeding with browser automation fallback...');
-    } catch (apiErr) {
-      console.warn(`   [Warn] Malabar direct API failed: ${apiErr.message}`);
-    }
+async function launchScraperBrowser() {
+  const args = ['--disable-dev-shm-usage', '--disable-gpu'];
+  if (process.env.CI === 'true' || process.env.PUPPETEER_NO_SANDBOX === 'true') {
+    args.push('--no-sandbox', '--disable-setuid-sandbox');
   }
 
   const launchOptions = {
-    headless: "new",
-    args: [
-      '--no-sandbox', 
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu'
-    ]
+    headless: 'new',
+    args,
   };
 
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
@@ -90,24 +75,56 @@ async function scrapeWithPuppeteer(provider) {
     console.log(`   [Info] Using custom browser path: ${launchOptions.executablePath}`);
   }
 
-  const browser = await puppeteer.launch(launchOptions);
+  return puppeteer.launch(launchOptions);
+}
+
+/**
+ * Puppeteer Scraping Strategy
+ * @param {Object} provider - Provider configuration object
+ * @param {import('puppeteer').Browser | null} [sharedBrowser=null] - Optional shared browser instance
+ */
+async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
+  console.log(`[Puppeteer] Initializing market synchronization for ${provider.name}...`);
+  
+  // --- STRATEGY: Malabar Gold (Tier 1 Fast-Path Direct Pricing API) ---
+  if (provider.name.includes('Malabar') && !provider.forceBrowserFallback) {
+    try {
+      console.log('   [Malabar] Attempting sub-second direct API extraction...');
+      const fastResult = await fetchMalabarDirectApi();
+      const validatedFast = normalizePriceMap(fastResult);
+      if (validatedFast['24k'] && validatedFast['22k']) {
+        console.log('   ✅ [Malabar] Extracted directly via official pricing API:', validatedFast);
+        return validatedFast;
+      }
+      console.log('   [Malabar] Direct API unfulfilled, proceeding with browser automation fallback...');
+    } catch (apiErr) {
+      console.warn(`   [Warn] Malabar direct API failed: ${apiErr.message}`);
+    }
+  }
+
+  const ownsBrowser = !sharedBrowser;
+  const browser = sharedBrowser || (await launchScraperBrowser());
+  let page = null;
 
   try {
-    const page = await browser.newPage();
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+    page = await browser.newPage();
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1280, height: 1200 });
 
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
     try {
-        const response = await page.goto(provider.url, { waitUntil: 'load', timeout: 90000 });
+        const response = await page.goto(provider.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         if (response && response.status() >= 400) {
             console.warn(`   [Warn] Navigation to ${provider.name} returned status ${response.status()}`);
         }
         
-        // Stabilization debounce
-        const waitTime = provider.name.includes('Malabar') ? 5000 : 10000;
-        await new Promise(r => setTimeout(r, waitTime));
+        // Wait for body text to populate instead of blind 10s sleep
+        await page.waitForFunction(
+          () => document.body && document.body.innerText && document.body.innerText.trim().length > 200,
+          { timeout: 8000 }
+        ).catch(() => {});
+        await new Promise(r => setTimeout(r, 1500));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }
@@ -151,7 +168,7 @@ async function scrapeWithPuppeteer(provider) {
                 }, { timeout: 15000 });
             }
 
-            const extracted = await page.evaluate(() => {
+            const extracted = await page.evaluate((minPrice, maxPrice) => {
                 const bodyTxt = document.body.innerText.replace(/\s+/g, ' ');
                 const res = {};
 
@@ -166,10 +183,10 @@ async function scrapeWithPuppeteer(provider) {
 
                 // Secondary regex searching for pairs of QAR prices
                 if (!res['22k'] || !res['24k']) {
-                    const matches = bodyTxt.match(/(\d{3}\.\d{2})\s*QAR/gi);
+                    const matches = bodyTxt.match(/(\d{3,4}\.\d{2})\s*QAR/gi);
                     if (matches && matches.length >= 2) {
                         const vals = Array.from(new Set(matches.map(m => parseFloat(m.replace(/[^\d.]/g, '')))))
-                            .filter(v => v > 300 && v < 1000)
+                            .filter(v => v >= minPrice && v <= maxPrice)
                             .sort((a, b) => a - b);
                         if (vals.length >= 2) {
                             res['22k'] = vals[0].toFixed(2);
@@ -185,7 +202,7 @@ async function scrapeWithPuppeteer(provider) {
                     if (qMatch) {
                         const v1 = parseFloat(qMatch[1]);
                         const v2 = parseFloat(qMatch[2]);
-                        if (v1 > 300 && v2 > 300) {
+                        if (v1 >= minPrice && v1 <= maxPrice && v2 >= minPrice && v2 <= maxPrice) {
                             const vals = [v1, v2].sort((a,b) => a-b);
                             res['22k'] = vals[0].toFixed(2);
                             res['24k'] = vals[1].toFixed(2);
@@ -194,11 +211,12 @@ async function scrapeWithPuppeteer(provider) {
                 }
 
                 return (res['22k'] && res['24k']) ? res : null;
-            });
+            }, MIN_VALID_PRICE, MAX_VALID_PRICE);
 
-            if (extracted) {
-                console.log('   ✅ [Malabar] Extracted live rates via browser automation:', extracted);
-                return extracted;
+            const validatedExtracted = normalizePriceMap(extracted);
+            if (validatedExtracted['22k'] && validatedExtracted['24k']) {
+                console.log('   ✅ [Malabar] Extracted live rates via browser automation:', validatedExtracted);
+                return validatedExtracted;
             }
         } catch (domErr) {
             console.warn(`   [Warn] Malabar browser extraction failed: ${domErr.message}`);
@@ -230,27 +248,17 @@ async function scrapeWithPuppeteer(provider) {
             }
             return res;
         });
-        if (alFardanPrices && (alFardanPrices['24k'] || alFardanPrices['22k'])) {
-            return alFardanPrices;
+        const validatedAlFardan = normalizePriceMap(alFardanPrices);
+        if (validatedAlFardan['24k'] || validatedAlFardan['22k']) {
+            return validatedAlFardan;
         }
     }
 
-    const prices = await page.evaluate((pName) => {
+    const prices = await page.evaluate((pName, minPrice, maxPrice) => {
         const res = {};
         if (!document.body) return { error: 'No document body' };
         
         const bodyText = document.body.innerText.replace(/\s+/g, ' ');
-        
-        const cleanPrice = (text) => {
-            if (!text) return null;
-            const clean = text.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
-            const match = clean.match(/(\d{3,}(?:\.\d+)?)/);
-            if (match) {
-                const val = parseFloat(match[1]);
-                if (val > 300 && val < 1000) return match[1];
-            }
-            return null;
-        };
 
         const findPrice = (karatLabel, assignedPrices = []) => {
             const index = bodyText.toLowerCase().indexOf(karatLabel.toLowerCase());
@@ -263,7 +271,7 @@ async function scrapeWithPuppeteer(provider) {
                 const found = matches.find(n => {
                     const cleanN = n.replace(/,/g, '').replace(/\s+\.\s+/g, '.');
                     const val = parseFloat(cleanN);
-                    return val > 300 && val < 1000 && !assignedPrices.includes(cleanN);
+                    return val >= minPrice && val <= maxPrice && !assignedPrices.includes(cleanN);
                 });
                 return found ? found.replace(/,/g, '').replace(/\s+\.\s+/g, '.') : null;
             }
@@ -284,23 +292,27 @@ async function scrapeWithPuppeteer(provider) {
         const k18 = findPrice('18 Karat', used) || findPrice('18KT', used) || findPrice('18K', used) || findPrice('18ct', used);
         if (k18) { res['18k'] = k18; }
 
-
         return res;
-    }, provider.name);
+    }, provider.name, MIN_VALID_PRICE, MAX_VALID_PRICE);
 
     if (prices && prices.error) {
         console.error(`   [Puppeteer] Evaluation error for ${provider.name}: ${prices.error}`);
         return null;
     }
 
-    return prices;
+    return normalizePriceMap(prices);
 
   } catch (err) {
     console.error(`   [Puppeteer] Critical synchronization failure for ${provider.name}: ${err.message}`);
     return null;
   } finally {
-    await browser.close();
+    if (page) {
+      await page.close().catch(() => {});
+    }
+    if (ownsBrowser && browser) {
+      await browser.close().catch(() => {});
+    }
   }
 }
 
-module.exports = { scrapeWithPuppeteer, fetchMalabarDirectApi };
+module.exports = { scrapeWithPuppeteer, fetchMalabarDirectApi, launchScraperBrowser };
