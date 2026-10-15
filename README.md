@@ -8,7 +8,7 @@ A premium, privacy-first mobile application to track real-time gold market data 
 
 - **📍 Resilient Scraping:** Dual-engine architecture (Puppeteer & Cheerio) with a **Direct-with-Fallback** safety net for critical providers like Malabar Gold.
 - **🛡️ Privacy-First Portfolio:** A secure, **Local-Only** vault to track your gold assets (Weight, Karat, Purchase Price). Your data never leaves your device.
-- **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 4 reliable local sources.
+- **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 5 reliable sources.
 - **📈 Performance Analytics:** Instant ROI and profit/loss calculation based on live deduplicated market averages.
 - **⚡ Smart-Sync Entry:** Intelligent bi-directional calculation between "Total Price" and "Price per Gram."
 - **🔔 Proactive Alerts:** Custom target notifications and automated system health emails for administrators.

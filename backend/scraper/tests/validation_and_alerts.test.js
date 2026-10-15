@@ -76,3 +76,45 @@ test('buildFallbackEmailContent differentiates fallback success vs critical tota
   assert.match(failMail.subject, /CRITICAL.*Extraction Failed/i);
   assert.match(failMail.text, /Both primary and fallback extraction failed/i);
 });
+
+test('extractPricesFromHtml extracts 1-gram QAR rates from GoodReturns multi-table HTML and ignores deltas/INR tables', () => {
+  const { extractPricesFromHtml } = require('../strategies/cheerio');
+  const html = `
+    <html><body>
+      <table class="gr-table table-conatiner">
+        <thead class="tabelhead">
+          <tr><th>Gram</th><th>24K</th><th>22K</th><th>18K</th></tr>
+        </thead>
+        <tbody class="tablebody">
+          <tr>
+            <td>1</td>
+            <td><span class="currency-symbol-left">﷼</span>501.50 <span class="gr-delta-up">(+7.50)</span></td>
+            <td><span class="currency-symbol-left">﷼</span>462 <span class="gr-delta-up">(+6.50)</span></td>
+            <td><span class="currency-symbol-left">﷼</span>378 <span class="gr-delta-up">(+5.30)</span></td>
+          </tr>
+          <tr>
+            <td>100</td>
+            <td>﷼50,150 (+750)</td>
+            <td>﷼46,200 (+650)</td>
+            <td>﷼37,800 (+530)</td>
+          </tr>
+        </tbody>
+      </table>
+      <table class="gr-table table-conatiner">
+        <thead><tr><th>Gram</th><th>24K</th><th>22K</th><th>18K</th></tr></thead>
+        <tbody><tr><td>1</td><td>₹13,039</td><td>₹12,012</td><td>₹9,828</td></tr></tbody>
+      </table>
+    </body></html>
+  `;
+
+  const extracted = extractPricesFromHtml(html, {
+    name: 'GoodReturns Aggregator',
+    url: 'https://www.goodreturns.in/gold-rates/qatar.html',
+  });
+
+  assert.deepEqual(extracted, {
+    '24k': '501.50',
+    '22k': '462.00',
+    '18k': '378.00',
+  });
+});

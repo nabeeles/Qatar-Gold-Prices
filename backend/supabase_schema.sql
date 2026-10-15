@@ -79,5 +79,6 @@ create policy "Unauthenticated users cannot read gold prices"
 insert into providers (name, url, scraping_type, selectors) values
 ('Al Fardan Exchange', 'https://alfardanexchange.com.qa/gold-rates', 'direct', '{"24k": "24 KARAT", "22k": "22 KARAT"}'),
 ('Joyalukkas', 'https://www.joyalukkas.com/qa/goldrate', 'direct', '{"24k": "24K", "22k": "22K"}'),
-('Malabar Gold', 'https://www.malabargoldanddiamonds.com/ae/goldprice', 'direct', '{"24k": "24K", "22k": "22K"}'),
-('GoodReturns Aggregator', 'https://www.goodreturns.in/gold-rates/qatar.html', 'aggregator', '{"24k": "24 K Gold", "22k": "22 K Gold"}');
+('Malabar Gold', 'https://www.malabargoldanddiamonds.com/ae/goldprice', 'direct', '{"24k": "24K", "22k": "22K", "interactive": true}'),
+('GoodReturns Aggregator', 'https://www.goodreturns.in/gold-rates/qatar.html', 'aggregator', '{"24k": "24 K Gold", "22k": "22 K Gold"}'),
+('LivePriceOfGold', 'https://www.livepriceofgold.com/Qatar-gold-price.html', 'aggregator', '{"24k": "24k", "22k": "22k", "21k": "21k", "18k": "18k"}');

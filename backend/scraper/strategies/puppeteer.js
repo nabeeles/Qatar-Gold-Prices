@@ -114,7 +114,7 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
     try {
-        const response = await page.goto(provider.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        const response = await page.goto(provider.url, { waitUntil: 'networkidle2', timeout: 45000 });
         if (response && response.status() >= 400) {
             console.warn(`   [Warn] Navigation to ${provider.name} returned status ${response.status()}`);
         }
@@ -124,7 +124,6 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
           () => document.body && document.body.innerText && document.body.innerText.trim().length > 200,
           { timeout: 8000 }
         ).catch(() => {});
-        await new Promise(r => setTimeout(r, 1500));
     } catch (gotoError) {
         console.warn(`   [Warn] Primary navigation for ${provider.name} timed out, attempting extraction anyway...`);
     }

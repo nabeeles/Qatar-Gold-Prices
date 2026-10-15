@@ -56,6 +56,7 @@ async function runHealthCheck() {
     if (failureItems.length > 0) {
       console.log(`\n🚨 Detected ${failureItems.length} failures. Sending alert...`);
       await sendHealthAlert(failureItems.join(''));
+      process.exitCode = 1;
     } else {
       console.log('\n🌟 All systems healthy. No action required.');
     }

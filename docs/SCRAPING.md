@@ -8,7 +8,7 @@ This document details the methodologies, heuristics, and fail-safes used to sync
 
 The scraper uses a tiered orchestration logic to balance accuracy and speed:
 1.  **Direct Strategy (Puppeteer):** Used for primary retail websites (Al Fardan Exchange, Joyalukkas, Malabar Gold) that utilize heavy JavaScript hydration or require regional interaction. A single shared headless Chromium instance (`launchScraperBrowser`) is pooled across all direct providers in a run, with isolated browser pages per provider.
-2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (`goldpriceqatar.com` / GoodReturns Aggregator) that provide fast, static HTML snapshots of the broader market.
+2.  **Aggregator Strategy (Cheerio):** Used for lightweight market aggregator sites (`goodreturns.in`, `livepriceofgold.com`, and the `goldpriceqatar.com` fallback feed) that provide fast, static HTML snapshots of the broader market.
 
 ---
 
@@ -47,7 +47,8 @@ For tabular data, the scraper maps header indices to data row indices dynamicall
 | **Malabar Gold** | `direct` | Puppeteer | Active | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
 | **Joyalukkas** | `direct` | Puppeteer | Active | Regional Page | Requires browser hydration; aggregator fallback enabled. |
 | **Al Fardan Exchange** | `direct` | Puppeteer | Active | Store / Rates Page | Direct product extraction (`24K` & `22K`); aggregator fallback enabled. |
-| **GoodReturns Aggregator** | `aggregator` | Cheerio | Active | Market Feed (`goldpriceqatar.com`) | Fast, high-reliability market feed and fallback source. |
+| **GoodReturns Aggregator** | `aggregator` | Cheerio | Active | Market Feed (`goodreturns.in`) | Fast tabular market feed (`24K`, `22K`, `18K`). |
+| **LivePriceOfGold** | `aggregator` | Cheerio | Active | Market Feed (`livepriceofgold.com`) | Full-spectrum aggregator (`24K`, `22K`, `21K`, `18K`). |
 | **Shine Jewelers** | `direct` | Puppeteer | Inactive | Storefront | Soft-deactivated (`is_active: false`) to preserve historical data. |
 
 ---
