@@ -31,9 +31,9 @@ The **Qatar Gold Prices** project is a robust, privacy-first system designed to 
 - **Health Monitoring & Fail-Safe Alerts:** Every fallback event or primary extraction failure triggers an immediate `sendFallbackAlert` email, complemented by a daily automated health check across all active sources.
 
 ### 2. The Cloud Layer (Supabase)
-- **Market Truth:** Acts as the global source of truth for gold rates across Qatar, indexed by `(provider_id, karat, timestamp DESC)` for fast time-series and latest-snapshot queries.
+- **Market Truth:** Acts as the global source of truth for gold rates across Qatar, indexed by `(provider_id, karat, scraped_at DESC)` and `(karat, scraped_at DESC)` for fast time-series and latest-snapshot queries.
 - **User-Scoped Alerts:** Stores push tokens and price thresholds in `price_alerts`, isolated per anonymous user session via `auth.uid() = user_id` Row-Level Security (RLS) policies.
-- **Hardened Security:** All sensitive keys are managed via environment variables, and email notification templates escape dynamic error strings via `escapeHtml`.
+- **Hardened Security:** All sensitive keys are managed via environment variables, and email notification templates escape dynamic error strings via `escapeHTML`.
 
 ### 3. The Private Vault (Mobile Frontend)
 - **Local-Only Privacy:** All user portfolio data (purchases, labels, weights) is stored strictly in the **Local SQLite** database. This data never leaves the device.

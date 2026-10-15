@@ -102,5 +102,5 @@ Configure the following repository secrets in GitHub:
 
 ### Initializing the Database
 Run the following SQL scripts in the Supabase SQL Editor:
-1. `backend/supabase_schema.sql`: Creates the `providers` and `gold_prices` tables, composite index `idx_gold_prices_provider_karat_time`, RLS policies, and seeds the default providers (`Al Fardan Exchange`, `Joyalukkas`, `Malabar Gold`, `GoodReturns Aggregator`, and `Shine Jewelers`).
+1. `backend/supabase_schema.sql`: Creates the `providers` and `gold_prices` tables, composite indexes (`idx_gold_prices_karat_scraped_at` and `idx_gold_prices_provider_karat_scraped_at`), RLS policies, and seeds the default providers (`Al Fardan Exchange`, `Joyalukkas`, `Malabar Gold`, and `GoodReturns Aggregator`).
 2. `backend/price_alerts_schema.sql`: Creates the `price_alerts` table (`user_id`, `expo_push_token`, `karat`, `target_price`, `condition`, `is_active`) and enforces per-user RLS policies (`auth.uid() = user_id`). Ensure **Anonymous Sign-Ins** are enabled in your Supabase Auth settings.

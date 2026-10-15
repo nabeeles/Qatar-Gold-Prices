@@ -15,14 +15,14 @@ const { supabase } = require('../../backend/scraper/utils/db');
 async function migrate() {
   console.log('--- Commencing Administrative Provider Migration ---');
   
-  // 1. Logic: Transition GoodReturns from static to dynamic Puppeteer extraction for higher fidelity.
+  // 1. Logic: Configure GoodReturns as lightweight static aggregator (Cheerio).
   const { error: err1 } = await supabase
     .from('providers')
-    .update({ scraping_type: 'direct' })
+    .update({ scraping_type: 'aggregator' })
     .eq('name', 'GoodReturns Aggregator');
   
   if (err1) console.error('[Migration] Failed to update GoodReturns configuration:', err1.message);
-  else console.log('✅ GoodReturns synchronized with Puppeteer strategy.');
+  else console.log('✅ GoodReturns configured as aggregator.');
 
   // 2. Logic: Enforce strict label matching for Al Fardan Exchange to mitigate parsing noise.
   const { error: err2 } = await supabase

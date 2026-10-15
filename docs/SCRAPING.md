@@ -30,10 +30,10 @@ To handle frequent website structural changes without constant code maintenance,
 Instead of relying on fragile CSS selectors (e.g., `.price-value`), the engine scans for "Anchors" (24K, 22K, 21K, 18K) and then evaluates the immediate textual surroundings for:
 -   **Currency Tokens:** Matches strings containing `QAR` or `﷼`.
 -   **Decimal Precision:** Prioritizes values with `.` (e.g., `552.50`) to avoid picking up store counts or years.
--   **Market Range Validation (`isValidPrice`):** Discards any value outside the realistic range of `100` to `2000` QAR per gram.
+-   **Market Range Validation (`isValidGoldPrice`):** Discards any value outside the realistic range of `100` to `2000` QAR per gram.
 
-### 2. Monotonic Purity Hierarchy (`validateKaratHierarchy`)
-Before any provider's extracted rates are accepted, `sanitizeProviderPrices` verifies that all present karats obey strict monotonic ordering (`24K >= 22K >= 21K >= 18K`). If a corrupted DOM scrape violates this hierarchy, the extraction is rejected and the orchestrator triggers the fallback/alert workflow.
+### 2. Monotonic Purity Hierarchy (`validateProviderPrices` & `normalizePriceMap`)
+Before any provider's extracted rates are accepted, `validateProviderPrices` and `normalizePriceMap` verify that all present karats obey strict monotonic ordering (`24K >= 22K >= 21K >= 18K`). If a corrupted DOM scrape violates this hierarchy, the extraction is rejected and the orchestrator triggers the fallback/alert workflow.
 
 ### 3. Multi-Column Mapping
 For tabular data, the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned.
@@ -42,13 +42,13 @@ For tabular data, the scraper maps header indices to data row indices dynamicall
 
 ## 📊 Provider Registry
 
-| Provider | `scraping_type` | Status | URL Type | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **Malabar Gold** | `puppeteer` | Active | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
-| **Joyalukkas** | `puppeteer` | Active | Regional Page | Requires browser hydration; aggregator fallback enabled. |
-| **Al Fardan Exchange** | `puppeteer` | Active | Store / Rates Page | Direct product extraction (`24K`); aggregator fallback enabled. |
-| **GoodReturns Aggregator** | `cheerio` | Active | Market Feed (`goldpriceqatar.com`) | Fast, high-reliability market feed and fallback source. |
-| **Shine Jewelers** | `puppeteer` | Inactive | Storefront | Soft-deactivated (`is_active: false`) to preserve historical data. |
+| Provider | `scraping_type` | Engine | Status | URL Type | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Malabar Gold** | `direct` | Puppeteer | Active | Regional Gold Price (`/ae/goldprice`) | Tier 1: Sub-second JSON API. Tier 2: Interactive UI. Tier 3: Aggregator fallback. |
+| **Joyalukkas** | `direct` | Puppeteer | Active | Regional Page | Requires browser hydration; aggregator fallback enabled. |
+| **Al Fardan Exchange** | `direct` | Puppeteer | Active | Store / Rates Page | Direct product extraction (`24K` & `22K`); aggregator fallback enabled. |
+| **GoodReturns Aggregator** | `aggregator` | Cheerio | Active | Market Feed (`goldpriceqatar.com`) | Fast, high-reliability market feed and fallback source. |
+| **Shine Jewelers** | `direct` | Puppeteer | Inactive | Storefront | Soft-deactivated (`is_active: false`) to preserve historical data. |
 
 ---
 

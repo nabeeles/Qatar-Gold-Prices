@@ -229,6 +229,14 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     // by dividing the total price of the 7.98 Gram Sovereign 22 Karat Gold Coin by its weight.
     if (provider.name.includes('Al Fardan')) {
         console.log('   [Al Fardan] Applying high-fidelity direct product extraction strategy...');
+        try {
+            await page.waitForFunction(() => {
+                const text = document.body ? document.body.innerText : '';
+                return text.includes('1 GRAM GOLD') || text.includes('SOVEREIGN COIN') || text.includes('FORTUNA BAR');
+            }, { timeout: 30000 });
+        } catch (waitErr) {
+            console.warn('   [Warn] Al Fardan product table wait timed out, attempting extraction anyway...');
+        }
         const alFardanPrices = await page.evaluate(() => {
             const res = {};
             const text = document.body.innerText.replace(/\s+/g, ' ');
@@ -253,6 +261,11 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
             return validatedAlFardan;
         }
     }
+
+    await page.waitForFunction(() => {
+        const text = document.body ? document.body.innerText : '';
+        return /24\s*(?:Karat|KT|K|ct)|22\s*(?:Karat|KT|K|ct)/i.test(text);
+    }, { timeout: 15000 }).catch(() => {});
 
     const prices = await page.evaluate((pName, minPrice, maxPrice) => {
         const res = {};
