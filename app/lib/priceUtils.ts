@@ -21,10 +21,23 @@ export function deduplicateLatestPrices<T extends PriceRowLike>(rows: T[]): T[] 
   });
 
   const seen = new Set<string>();
+  const latestProviderMs = new Map<string, number>();
   const result: T[] = [];
 
   for (const row of sorted) {
     const providerKey = row.provider?.name || String(row.provider_id ?? 'unknown');
+    const rowMs = row.scraped_at ? new Date(row.scraped_at).getTime() : 0;
+
+    if (rowMs > 0) {
+      const newestForProvider = latestProviderMs.get(providerKey);
+      if (newestForProvider === undefined) {
+        latestProviderMs.set(providerKey, rowMs);
+      } else if (newestForProvider - rowMs > 60 * 60 * 1000) {
+        // Skip stale karat rows from an older scrape session (>1 hour older than provider's latest scrape)
+        continue;
+      }
+    }
+
     const key = `${providerKey}:${row.karat}`;
     if (!seen.has(key)) {
       seen.add(key);

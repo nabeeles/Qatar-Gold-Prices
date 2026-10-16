@@ -20,6 +20,17 @@ test('deduplicateLatestPrices keeps only the most recent entry per provider and 
   assert.deepEqual(deduped.map((r) => r.id), ['new-malabar', 'malabar-22', 'joyalukkas-id-only']);
 });
 
+test('deduplicateLatestPrices excludes stale karats from an older scrape session when a provider has newer rates', () => {
+  const rows = [
+    { id: 'malabar-24-today', karat: 24, price: 503.5, scraped_at: '2026-10-16T07:14:02Z', provider: { name: 'Malabar Gold' } },
+    { id: 'malabar-22-today', karat: 22, price: 464.5, scraped_at: '2026-10-16T07:14:02Z', provider: { name: 'Malabar Gold' } },
+    { id: 'malabar-21-stale', karat: 21, price: 491.11, scraped_at: '2026-09-29T18:46:47Z', provider: { name: 'Malabar Gold' } },
+  ];
+
+  const deduped = deduplicateLatestPrices(rows);
+  assert.deepEqual(deduped.map((r) => r.id), ['malabar-24-today', 'malabar-22-today']);
+});
+
 test('computeMarketAverages averages only the latest deduplicated price per provider for each karat', () => {
   const rows = [
     { id: '1', karat: 24, price: 320, scraped_at: '2026-10-15T12:00:00Z', provider: { name: 'Malabar Gold' } },
