@@ -75,7 +75,20 @@ async function launchScraperBrowser() {
     console.log(`   [Info] Using custom browser path: ${launchOptions.executablePath}`);
   }
 
-  return puppeteer.launch(launchOptions);
+  try {
+    return await puppeteer.launch(launchOptions);
+  } catch (err) {
+    const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    if (
+      !launchOptions.executablePath &&
+      process.platform === 'darwin' &&
+      require('fs').existsSync(macChrome)
+    ) {
+      console.log(`   [Info] Falling back to system Chrome: ${macChrome}`);
+      return puppeteer.launch({ ...launchOptions, executablePath: macChrome });
+    }
+    throw err;
+  }
 }
 
 /**

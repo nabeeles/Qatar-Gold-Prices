@@ -84,7 +84,7 @@ async function purgeCorruptedPrices() {
 
   const batches = new Map();
   for (const row of allRows) {
-    const minuteBucket = (row.scraped_at || '').slice(0, 19);
+    const minuteBucket = (row.scraped_at || '').slice(0, 16);
     const key = `${row.provider_id}__${minuteBucket}`;
     if (!batches.has(key)) batches.set(key, []);
     batches.get(key).push(row);

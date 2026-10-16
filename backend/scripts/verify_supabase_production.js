@@ -291,7 +291,7 @@ async function runReadinessCheck() {
 
   const batches = new Map();
   for (const row of recentRows || []) {
-    const minuteBucket = (row.scraped_at || '').slice(0, 19);
+    const minuteBucket = (row.scraped_at || '').slice(0, 16);
     const key = `${row.provider_id}__${minuteBucket}`;
     if (!batches.has(key)) batches.set(key, {});
     batches.get(key)[row.karat] = Number(row.price);
@@ -330,7 +330,10 @@ async function runReadinessCheck() {
     if (!byProvider[pName]) {
       byProvider[pName] = { latest_scraped_at: row.scraped_at, karats: {} };
     }
-    if (!byProvider[pName].karats[row.karat]) {
+    const latestMs = new Date(byProvider[pName].latest_scraped_at).getTime();
+    const rowMs = new Date(row.scraped_at).getTime();
+    // Only include karats from the provider's most recent scrape batch (within 5 minutes)
+    if (Math.abs(latestMs - rowMs) <= 5 * 60 * 1000 && !byProvider[pName].karats[row.karat]) {
       byProvider[pName].karats[row.karat] = row.price;
     }
   }
