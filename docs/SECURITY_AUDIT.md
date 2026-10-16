@@ -41,6 +41,9 @@ The **Qatar Gold Price Tracker** repository underwent a comprehensive security, 
 | **Alert Input & Session Bounds (`alerts.tsx`)** | Low | ✅ Fixed | Hardened [`app/app/(tabs)/alerts.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/(tabs)/alerts.tsx) to verify a non-null `user.id` and bound `target_price` between `1` and `100,000` QAR/g before inserting into `price_alerts`. |
 | **GitHub Actions `GITHUB_TOKEN` Permissions** | Low | ✅ Fixed | Added explicit top-level `permissions: contents: read` to [`.github/workflows/scrape-prices.yml`](file:///Users/nab/Code/qatar-gold-prices/.github/workflows/scrape-prices.yml) and [`.github/workflows/provider-health-check.yml`](file:///Users/nab/Code/qatar-gold-prices/.github/workflows/provider-health-check.yml). |
 | **Tracked Legacy Diagnostic Script & Debug Screenshots** | Low | ✅ Fixed | Removed tracked `backend/test_security.js`, `.idea/`, and `backend/scraper/debug/*.png` artifacts from git index. |
+| **Live Supabase Historical Data Anomalies (826 Rows)** | Medium | ✅ Fixed | Executed [`backend/scripts/purge_corrupted_prices.js`](file:///Users/nab/Code/qatar-gold-prices/backend/scripts/purge_corrupted_prices.js) against live Supabase (`167` rows with `price = 2026` and `659` rows from inverted-karat historical batches deleted) and added `CHECK (price >= 100 AND price <= 2000)` in [`backend/migrations/20261016_production_rls_hardening.sql`](file:///Users/nab/Code/qatar-gold-prices/backend/migrations/20261016_production_rls_hardening.sql). |
+| **Cross-Session Stale Karat Mixing (`priceUtils.ts`)** | Medium | ✅ Fixed | Updated `deduplicateLatestPrices` in [`app/lib/priceUtils.ts`](file:///Users/nab/Code/qatar-gold-prices/app/lib/priceUtils.ts) to drop karat rows `>1 hour` older than a provider's newest `scraped_at` timestamp. |
+| **Standalone Android FCM Crash Risk (`notifications.ts`)** | Low | ✅ Fixed | Hardened [`app/lib/notifications.ts`](file:///Users/nab/Code/qatar-gold-prices/app/lib/notifications.ts) to catch native FCM initialization errors when `google-services.json` is absent and return `null` gracefully; gitignored `google-services.json` in [`app/.gitignore`](file:///Users/nab/Code/qatar-gold-prices/app/.gitignore). |
 
 ---
 
@@ -49,8 +52,10 @@ The **Qatar Gold Price Tracker** repository underwent a comprehensive security, 
 1. **Android Permission Minimization ([`app/app.json`](file:///Users/nab/Code/qatar-gold-prices/app/app.json)):**
    - Declared only `INTERNET`, `VIBRATE`, and `POST_NOTIFICATIONS`.
    - Explicitly blocked `RECORD_AUDIO`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, and `SYSTEM_ALERT_WINDOW` via `android.blockedPermissions`.
-2. **True 32-bit PNG Asset Compliance:**
-   - Converted `icon.png`, `adaptive-icon.png`, `splash-icon.png`, and `favicon.png` from JPEG data to compliant `1024×1024` RGB PNG images.
+2. **True 24/32-bit PNG Asset Compliance:**
+   - Converted `icon.png`, `adaptive-icon.png`, `splash-icon.png`, and `favicon.png` from JPEG data to compliant `1024×1024` RGB PNG images, and generated Play Console assets in [`docs/store-assets/`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets).
 3. **In-App & Hosted Privacy Disclosures:**
    - Replaced template modal with an in-app **Privacy, Data Sovereignty & Market Disclaimer** screen ([`app/app/modal.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/modal.tsx)), accessible from the Dashboard header.
-   - Authored [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md) and [`docs/PLAY_STORE_RELEASE.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PLAY_STORE_RELEASE.md).
+   - Authored [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md), standalone [`docs/privacy-policy.html`](file:///Users/nab/Code/qatar-gold-prices/docs/privacy-policy.html), and [`docs/PLAY_STORE_RELEASE.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PLAY_STORE_RELEASE.md).
+4. **Automated Live Supabase Verification (`npm --prefix backend run verify:db`):**
+   - Added [`backend/scripts/verify_supabase_production.js`](file:///Users/nab/Code/qatar-gold-prices/backend/scripts/verify_supabase_production.js) to continuously verify 18 production security, RLS isolation, constraint, and data-integrity checks against live Supabase.

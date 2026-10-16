@@ -15,32 +15,24 @@ This guide covers everything needed to build, sign, and submit **Qatar Gold Pric
 | **Permission Minimization** | ✅ Ready | Only `INTERNET`, `POST_NOTIFICATIONS`, and `VIBRATE` allowed; storage/media/audio/overlay permissions explicitly blocked via `android.blockedPermissions` |
 | **Local Vault Cloud Backup Block** | ✅ Ready | `android.allowBackup: false` set in [`app/app.json`](file:///Users/nab/Code/qatar-gold-prices/app/app.json) so `vault.db` is never uploaded to Google Drive |
 | **In-App Privacy & Disclaimer** | ✅ Ready | Accessible from the Dashboard header Shield icon (`/modal` in [`app/app/modal.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/modal.tsx)) |
-| **Public Privacy Policy** | ✅ Ready | Authored in [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md) |
+| **Public Privacy Policy** | ✅ Ready | Authored in [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md) and standalone HTML [`docs/privacy-policy.html`](file:///Users/nab/Code/qatar-gold-prices/docs/privacy-policy.html) |
+| **Play Store Graphic Assets** | ✅ Ready | Generated in [`docs/store-assets/`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets) (`play-store-icon-512.png`, `feature-graphic-1024x500.png`, and 5 `1080×1920` screenshots) |
+| **Supabase Production Verifier** | ✅ Ready | 18-point automated verification via `npm --prefix backend run verify:db` ([`backend/scripts/verify_supabase_production.js`](file:///Users/nab/Code/qatar-gold-prices/backend/scripts/verify_supabase_production.js)) |
 
 ---
 
 ## 2. Building the Signed Release Artifact
 
+The [`app/scripts/build-release-local.sh`](file:///Users/nab/Code/qatar-gold-prices/app/scripts/build-release-local.sh) helper automatically loads `app/.env`, verifies that `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are exported in the shell, and executes `npx eas build --local`.
+
 ### Option A: Google Play Store Bundle (`.aab`) — Recommended for Play Console
-Remember to export the public Supabase environment variables in your shell before running `--local` builds so Metro inlines them at bundle time:
-
 ```bash
-cd app
-export EXPO_PUBLIC_SUPABASE_URL="https://your-project-id.supabase.co"
-export EXPO_PUBLIC_SUPABASE_ANON_KEY="your-anon-public-key"
-
-# Generate signed Android App Bundle (.aab) locally
-eas build --platform android --profile playstore --local
+npm --prefix app run build:playstore:local
 ```
 
 ### Option B: Direct Distribution APK (`.apk`) — Per `GEMINI.md` Mandate
 ```bash
-cd app
-export EXPO_PUBLIC_SUPABASE_URL="https://your-project-id.supabase.co"
-export EXPO_PUBLIC_SUPABASE_ANON_KEY="your-anon-public-key"
-
-# Generate signed standalone APK locally
-eas build --platform android --profile production --local
+npm --prefix app run build:apk:local
 ```
 
 > [!IMPORTANT]
@@ -52,7 +44,7 @@ eas build --platform android --profile production --local
 ## 3. Google Play Console — App Content Declarations
 
 ### 3.1 Privacy Policy URL
-Host [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md) on GitHub Pages (or your project website) and paste the HTTPS URL into **Policy -> App content -> Privacy policy**.
+Host [`docs/privacy-policy.html`](file:///Users/nab/Code/qatar-gold-prices/docs/privacy-policy.html) (or [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md)) on GitHub Pages (`Settings -> Pages -> Deploy from a branch -> master /docs`) and paste the HTTPS URL into **Policy -> App content -> Privacy policy**.
 
 ### 3.2 Data Safety Questionnaire (Exact Answers)
 
@@ -106,12 +98,12 @@ Google Play requires all apps with finance-related keywords to complete the **Fi
   Disclaimer: Displayed gold rates are for informational reference only and do not constitute financial or investment advice.
   ```
 
-### Required Graphic Assets Checklist for Play Console
-1. **Hi-res App Icon:** `512 × 512 px` 32-bit PNG (can be resized from [`app/assets/images/icon.png`](file:///Users/nab/Code/qatar-gold-prices/app/assets/images/icon.png)).
-2. **Feature Graphic:** `1024 × 500 px` PNG or JPEG (dark `#0A0A0A` background with `#D4AF37` gold typography).
-3. **Phone Screenshots (2 to 8 required):** `1080 × 1920 px` (9:16) PNG/JPEG showing:
-   - Dashboard ("Market Overview" & retailer cards)
-   - Trends (Interactive historical chart)
-   - Calculator (Weight + making charges)
-   - My Gold Vault (Local portfolio tracker)
-   - Alerts (Custom QAR/g price target setup)
+### Generated Graphic Assets for Play Console (`docs/store-assets/`)
+1. **Hi-res App Icon (`512 × 512 px` 24-bit RGB PNG, no alpha):** [`docs/store-assets/play-store-icon-512.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/play-store-icon-512.png)
+2. **Feature Graphic (`1024 × 500 px` 24-bit RGB PNG, no alpha):** [`docs/store-assets/feature-graphic-1024x500.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/feature-graphic-1024x500.png)
+3. **Phone Screenshots (`1080 × 1920 px`, 9:16 PNGs):**
+   - [`docs/store-assets/screenshots/01-live-qatar-gold-rates.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/screenshots/01-live-qatar-gold-rates.png) (Live Market Overview & Retailer Cards)
+   - [`docs/store-assets/screenshots/02-local-portfolio-tracker.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/screenshots/02-local-portfolio-tracker.png) (Private On-Device "My Gold" Vault)
+   - [`docs/store-assets/screenshots/03-smart-sync-add-asset.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/screenshots/03-smart-sync-add-asset.png) (Smart-Sync Bi-Directional Asset Entry)
+   - [`docs/store-assets/screenshots/04-price-analytics-trends.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/screenshots/04-price-analytics-trends.png) (Historical Price Trends & Analytics)
+   - [`docs/store-assets/screenshots/05-settings-local-privacy.png`](file:///Users/nab/Code/qatar-gold-prices/docs/store-assets/screenshots/05-settings-local-privacy.png) (Custom Price Alerts & Zero-Knowledge Privacy)

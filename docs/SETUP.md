@@ -41,12 +41,14 @@ npx tsc --noEmit
 npx expo start
 ```
 
-### 5. Build for Android (Local APK via EAS)
-Per project mandates, production APKs are built locally using `--local` with environment variables explicitly exported in the shell:
+### 5. Build for Android (Local `.aab` / `.apk` via EAS)
+Per project mandates, production builds run locally using `--local` with environment variables explicitly exported in the shell. The [`app/scripts/build-release-local.sh`](file:///Users/nab/Code/qatar-gold-prices/app/scripts/build-release-local.sh) helper automatically loads `app/.env`, validates `EXPO_PUBLIC_SUPABASE_*`, and invokes `eas build --local`:
 ```bash
-export EXPO_PUBLIC_SUPABASE_URL="your_supabase_url"
-export EXPO_PUBLIC_SUPABASE_ANON_KEY="your_supabase_anon_key"
-npx eas build --local -p android --profile production
+# Build signed Android App Bundle (.aab) for Google Play Store
+npm --prefix app run build:playstore:local
+
+# Build signed standalone APK (.apk) for direct distribution
+npm --prefix app run build:apk:local
 ```
 
 ---
@@ -63,16 +65,18 @@ npm install
 Create a `.env` file in the `backend/` directory:
 ```env
 SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 EMAIL_USER=your_gmail_address
 EMAIL_PASS=your_gmail_app_password
 NOTIFICATION_EMAIL=admin_recipient_email
 ```
 
-### 3. Run Unit Tests
+### 3. Run Unit Tests & Live Supabase Verification
 ```bash
 cd backend
 npm test
+npm run verify:db
 ```
 
 ### 4. Run Scraper or Health Check Manually
@@ -87,7 +91,7 @@ node scraper/health-check.js
 ## 🚀 Deployment & CI/CD
 
 ### GitHub Actions (Scraper Cron & Health Check)
-The automated workflows are located in `.github/workflows/scrape-prices.yml` (hourly at `0 * * * *`) and `.github/workflows/health-check.yml` (daily at `0 8 * * *`).
+The automated workflows are located in `.github/workflows/scrape-prices.yml` (hourly at `0 * * * *`) and `.github/workflows/provider-health-check.yml` (daily at `0 8 * * *`).
 
 Configure the following repository secrets in GitHub:
 - `SUPABASE_URL`
@@ -100,7 +104,8 @@ Configure the following repository secrets in GitHub:
 
 ## 🛠️ Supabase Configuration
 
-### Initializing the Database
+### Initializing & Hardening the Database
 Run the following SQL scripts in the Supabase SQL Editor:
-1. `backend/supabase_schema.sql`: Creates the `providers` and `gold_prices` tables, composite indexes (`idx_gold_prices_karat_scraped_at` and `idx_gold_prices_provider_karat_scraped_at`), RLS policies, and seeds the default providers (`Al Fardan Exchange`, `Joyalukkas`, `Malabar Gold`, `GoodReturns Aggregator`, and `LivePriceOfGold`).
+1. `backend/supabase_schema.sql`: Creates the `providers` and `gold_prices` tables, `CHECK (price >= 100 AND price <= 2000)` price bounds, composite indexes (`idx_gold_prices_karat_scraped_at` and `idx_gold_prices_provider_karat_scraped_at`), RLS policies, and seeds the default providers (`Al Fardan Exchange`, `Joyalukkas`, `Malabar Gold`, `GoodReturns Aggregator`, and `LivePriceOfGold`).
 2. `backend/price_alerts_schema.sql`: Creates the `price_alerts` table (`user_id`, `expo_push_token`, `karat`, `target_price`, `condition`, `is_active`) and enforces per-user RLS policies (`auth.uid() = user_id`). Ensure **Anonymous Sign-Ins** are enabled in your Supabase Auth settings.
+3. `backend/migrations/20261016_production_rls_hardening.sql`: Idempotent migration for existing databases that tightens `providers` and `gold_prices` `SELECT` policies strictly to `TO authenticated` and enforces the `gold_prices_price_bounds_check` (`100`–`2000` QAR/g) constraint.

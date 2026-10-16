@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-10-16
+
+### Added
+- **Supabase Production Readiness Suite (`backend/scripts/verify_supabase_production.js`)**: Added an 18-point automated verification script (`npm --prefix backend run verify:db`) auditing anonymous authentication, per-table RLS enforcement (`providers`, `gold_prices`, `price_alerts`), database constraints, active provider freshness, and historical price sanity.
+- **Database RLS & Price-Bounds Migration (`backend/migrations/20261016_production_rls_hardening.sql`)**: Added an idempotent SQL migration enforcing `CHECK (price >= 100 AND price <= 2000)` on `gold_prices.price` and restricting `providers` and `gold_prices` read policies strictly to `TO authenticated`.
+- **Google Play Store Graphic Assets (`docs/store-assets/`)**: Generated compliant 24-bit RGB PNG store assets including `play-store-icon-512.png` (`512×512`), `feature-graphic-1024x500.png` (`1024×500`), and 5 high-resolution phone screenshots (`1080×1920`).
+- **Local EAS Release Helper (`app/scripts/build-release-local.sh`)**: Added `npm --prefix app run build:playstore:local` (`.aab`) and `npm --prefix app run build:apk:local` (`.apk`) with automatic `.env` loading and `EXPO_PUBLIC_SUPABASE_*` validation.
+- **Standalone HTML Privacy Policy (`docs/privacy-policy.html`)**: Created a self-contained HTML privacy policy page ready for GitHub Pages HTTPS hosting.
+
+### Fixed
+- **Historical Data Hygiene (`backend/scripts/purge_corrupted_prices.js`)**: Purged 826 corrupted historical `gold_prices` rows (`167` rows with `price = 2026` and `659` rows from inverted-karat historical batches) from live Supabase and synchronized fresh prices across all 5 active Qatari providers.
+- **Stale Cross-Session Karat Filtering (`app/lib/priceUtils.ts`)**: Updated `deduplicateLatestPrices` to exclude karat rows older than 1 hour relative to a provider's newest `scraped_at` timestamp, preventing discontinued karats from older sessions from mixing with current rates.
+- **Resilient Android Push Token Registration (`app/lib/notifications.ts`)**: Hardened `registerForPushNotificationsAsync` to catch native FCM initialization errors when `google-services.json` is absent and return `null` gracefully.
+- **macOS Scraper Browser Detection (`backend/scraper/strategies/puppeteer.js`)**: Added automatic fallback to system Google Chrome on macOS when bundled Chromium is unavailable.
+
 ## [1.3.0] - 2026-10-15
 
 ### Added

@@ -36,24 +36,28 @@ A premium, privacy-first mobile application to track real-time gold market data 
 - **[Scraping Strategy](docs/SCRAPING.md):** Detailed heuristics and aggregator fail-safe logic.
 - **[API & Schema Reference](docs/API.md):** Supabase schema, RLS policies, and data hooks.
 - **[Setup & Deployment](docs/SETUP.md):** Instructions for local EAS builds, testing, and environment injection.
-- **[Security Audit](docs/SECURITY_AUDIT.md):** Remediated findings and dependency hardening report.
+- **[Google Play Store Release Guide](docs/PLAY_STORE_RELEASE.md):** Store listing assets, Data Safety answers, and release build steps.
+- **[Privacy Policy](docs/PRIVACY_POLICY.md)** ([HTML page](docs/privacy-policy.html)): Public zero-knowledge privacy disclosure.
+- **[Security Audit](docs/SECURITY_AUDIT.md):** Remediated findings, live Supabase verification, and dependency hardening report.
 
 ---
 
 ## 🚀 Development & Testing
 
-Run the automated test suites for both the mobile frontend and backend scraper:
+Run the automated unit test suites and the 18-point live Supabase production readiness check:
 ```bash
 npm --prefix app test
 npm --prefix backend test
+npm --prefix backend run verify:db
 ```
 
-Production builds are performed locally using **EAS Local** to ensure maximum stability:
+Production builds are performed locally using **EAS Local** (`app/scripts/build-release-local.sh` validates and exports `EXPO_PUBLIC_SUPABASE_*` automatically from `app/.env`):
 ```bash
-# Manual environment injection is required for local builds
-export EXPO_PUBLIC_SUPABASE_URL="your_url"
-export EXPO_PUBLIC_SUPABASE_ANON_KEY="your_key"
-npx eas build --local -p android --profile production
+# Build signed Android App Bundle (.aab) for Google Play Store
+npm --prefix app run build:playstore:local
+
+# Build signed standalone APK (.apk) for direct distribution
+npm --prefix app run build:apk:local
 ```
 
 ---

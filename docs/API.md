@@ -27,8 +27,8 @@ This table stores historical gold price records.
 |---|---|---|
 | `id` | `int8` | Primary key (`bigint generated always as identity`). |
 | `provider_id` | `uuid` | Foreign key referencing `providers(id)`. |
-| `karat` | `int4` | The gold karat (`24`, `22`, `21`, or `18`). |
-| `price` | `numeric(10, 2)` | The price per gram in QAR. |
+| `karat` | `int4` | The gold karat (`24`, `22`, `21`, or `18`, enforced via `CHECK`). |
+| `price` | `numeric(10, 2)` | The price per gram in QAR (`CHECK (price >= 100 AND price <= 2000)`). |
 | `currency` | `text` | Always `'QAR'`. |
 | `scraped_at` | `timestamptz` | Timestamp of when the price was extracted. |
 
@@ -50,7 +50,7 @@ Used to store user push notification targets.
 ## 🔒 Security & Access Control
 
 ### Row Level Security (RLS)
-The database uses Supabase RLS policies to control access:
+The database uses Supabase RLS policies to control access (auditable via `npm --prefix backend run verify:db`):
 - **Authenticated Sessions (including Anonymous Sign-ins):** Can **SELECT** from `gold_prices` and `providers`, and **SELECT/INSERT/UPDATE/DELETE** their own rows in `price_alerts` where `(select auth.uid()) = user_id`.
 - **Unauthenticated (`anon`) Role:** Explicitly blocked from reading `gold_prices` and `providers` or modifying `price_alerts`.
 - **Scraper (`service_role`):** Has full access to write into `gold_prices`, update `price_alerts`, and read/update `providers`.
@@ -66,7 +66,7 @@ The app uses **React Query** (`@tanstack/react-query`) to interact with the data
 
 ### `useLatestPrices()`
 - **Query Key:** `['latest-prices']`
-- **Purpose:** Fetches the most recent price records (`.limit(100)`) and deduplicates by `(provider_id, karat)` for active providers.
+- **Purpose:** Fetches the most recent price records (`.limit(100)`) and deduplicates by `(provider_id, karat)` via `deduplicateLatestPrices` (`app/lib/priceUtils.ts`), automatically dropping any stale karat row older than 1 hour relative to a provider's newest `scraped_at` timestamp.
 - **Join Logic:** Performs a join with `providers (name, is_active)` and filters out inactive providers.
 
 ### `useHistoricalPrices(karat)`
