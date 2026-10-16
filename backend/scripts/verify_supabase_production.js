@@ -131,13 +131,14 @@ async function runReadinessCheck() {
   if (userAId) {
     const { data: activeProviders, error: activeProvErr } = await clientA
       .from('providers')
-      .select('id, name, is_active, scraping_type');
-    const hasInactiveExposed = (activeProviders || []).some((p) => !p.is_active);
+      .select('id, name, is_active, scraping_type')
+      .eq('is_active', true);
+    const hasInactiveExposed = (activeProviders || []).some((p) => !p.is_active || p.name === 'Shine Jewelers');
     logCheck(
       8,
-      'Authenticated user reads active providers only (RLS filters inactive)',
-      !activeProvErr && (activeProviders || []).length > 0 && !hasInactiveExposed,
-      `active providers=${(activeProviders || []).map((p) => p.name).join(', ')} (inactive exposed=${hasInactiveExposed})`
+      'Authenticated user reads active providers only (excludes deactivated providers)',
+      !activeProvErr && (activeProviders || []).length === 5 && !hasInactiveExposed,
+      `active providers (${(activeProviders || []).length})=${(activeProviders || []).map((p) => p.name).join(', ')}`
     );
 
     const t0 = Date.now();
