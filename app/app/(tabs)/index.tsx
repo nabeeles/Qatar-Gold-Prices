@@ -1,10 +1,11 @@
 import React from 'react';
-import { FlatList, View, Text, RefreshControl, ActivityIndicator } from 'react-native';
+import { FlatList, View, Text, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 import { useLatestPrices } from '../../hooks/useGoldPrices';
 import { PriceCard } from '../../components/PriceCard';
 import { formatCurrency } from '../../lib/format';
-import { TrendingUp } from 'lucide-react-native';
+import { TrendingUp, ShieldCheck } from 'lucide-react-native';
 
 /**
  * Dashboard Screen Component.
@@ -88,10 +89,29 @@ export default function Dashboard() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
       <View style={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 }}>
-        <Text style={{ color: '#A0A0A0', fontSize: 12, textTransform: 'uppercase', letterSpacing: 4, marginBottom: 4, fontWeight: '600' }}>
-          Market Overview
-        </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 36, fontWeight: 'bold', marginBottom: 24 }}>Qatar Gold</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+          <View>
+            <Text style={{ color: '#A0A0A0', fontSize: 12, textTransform: 'uppercase', letterSpacing: 4, marginBottom: 4, fontWeight: '600' }}>
+              Market Overview
+            </Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 36, fontWeight: 'bold' }}>Qatar Gold</Text>
+          </View>
+          <Link href="/modal" asChild>
+            <TouchableOpacity
+              accessibilityLabel="Privacy and Data Safety Information"
+              style={{
+                backgroundColor: '#141414',
+                borderColor: '#262626',
+                borderWidth: 1,
+                padding: 10,
+                borderRadius: 14,
+                marginTop: 4,
+              }}
+            >
+              <ShieldCheck size={20} color="#D4AF37" />
+            </TouchableOpacity>
+          </Link>
+        </View>
         
         {/* Hero Average Card */}
         <View style={{ backgroundColor: '#D4AF37', borderRadius: 24, padding: 24, marginBottom: 32, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

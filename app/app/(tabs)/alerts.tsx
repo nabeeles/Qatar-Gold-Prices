@@ -75,8 +75,8 @@ export default function Alerts() {
     }
 
     const parsedTarget = parseFloat(targetPrice);
-    if (!targetPrice || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
-      Alert.alert('Error', 'Please enter a valid target price greater than 0.');
+    if (!targetPrice || !Number.isFinite(parsedTarget) || parsedTarget <= 0 || parsedTarget > 100000) {
+      Alert.alert('Error', 'Please enter a valid target price between 1 and 100,000 QAR/g.');
       return;
     }
 
@@ -89,11 +89,15 @@ export default function Alerts() {
       }
 
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.id) {
+        Alert.alert('Connection Error', 'Anonymous session is not ready yet. Please try again in a moment.');
+        return;
+      }
       
       const { error } = await supabase.from('price_alerts').insert({
-        user_id: user?.id,
+        user_id: user.id,
         karat,
-        target_price: parsedTarget,
+        target_price: Math.round(parsedTarget * 100) / 100,
         condition,
         expo_push_token: token,
       });

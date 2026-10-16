@@ -94,7 +94,15 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="modal"
+          options={{
+            presentation: 'modal',
+            title: 'Privacy & Data Safety',
+            headerStyle: { backgroundColor: '#0A0A0A' },
+            headerTintColor: '#D4AF37',
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );

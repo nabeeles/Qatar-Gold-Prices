@@ -195,21 +195,27 @@ function AddAssetModal({ visible, onClose, onSave }: { visible: boolean, onClose
     const p = parseFloat(pricePerGram);
     const t = parseFloat(totalPrice);
 
-    if (isNaN(w) || w <= 0) {
-        Alert.alert('Validation Error', 'Please enter a valid gold weight.');
+    if (!Number.isFinite(w) || w <= 0 || w > 100000) {
+        Alert.alert('Validation Error', 'Please enter a valid gold weight between 0.01 and 100,000 grams.');
         return;
     }
 
-    if (isNaN(p) && isNaN(t)) {
+    if (!Number.isFinite(p) && !Number.isFinite(t)) {
         Alert.alert('Validation Error', 'Please enter either the price per gram or the total purchase price.');
         return;
     }
 
     // Determine the most accurate price per gram
-    const finalPricePerGram = !isNaN(p) ? p : (t / w);
+    const finalPricePerGram = Number.isFinite(p) ? p : (t / w);
+    if (!Number.isFinite(finalPricePerGram) || finalPricePerGram <= 0 || finalPricePerGram > 100000) {
+        Alert.alert('Validation Error', 'Please enter a valid purchase price per gram between 1 and 100,000 QAR.');
+        return;
+    }
+
+    const sanitizedLabel = label.trim().slice(0, 80);
 
     onSave({
-      label,
+      label: sanitizedLabel || null,
       karat,
       weight: w,
       price_per_gram: finalPricePerGram,

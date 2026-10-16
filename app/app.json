@@ -1,33 +1,46 @@
 {
   "expo": {
-    "name": "Qatar Gold Price",
-    "slug": "qatar-gold-price",
+    "name": "Qatar Gold Price Tracker",
+    "slug": "qatar-gold-prices",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.jpg",
-    "scheme": "qatar-gold-price",
+    "icon": "./assets/images/icon.png",
+    "scheme": "qatargoldprices",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.jpg",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A0A0A"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nabeeles.qatargold",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.qatargold.tracker"
     },
     "android": {
-      "package": "com.nabeeles.qatargold",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.jpg",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0A0A0A"
       },
+      "package": "com.qatargold.tracker",
+      "versionCode": 1,
+      "allowBackup": false,
       "edgeToEdgeEnabled": true,
-      "versionCode": 24
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -36,20 +49,24 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store",
-      "expo-notifications",
-      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#D4AF37"
+        }
+      ],
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "d7fe5f58-d1ad-48f3-b805-b8add857da15"
-      },
-      "router": {}
+        "projectId": "63513328-d851-4bf8-bb4e-e0a3c121e669"
+      }
     }
   }
 }

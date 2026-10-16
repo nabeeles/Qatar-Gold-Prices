@@ -5,8 +5,13 @@ node_modules/
 dist/
 build/
 .env
+.env.*
+.idea/
+backend/scraper/debug/
 scraping-test/*.png
 *.apk
 *.aab
+*.jks
+*.keystore
 nanobanana-output/
 graphify-out/

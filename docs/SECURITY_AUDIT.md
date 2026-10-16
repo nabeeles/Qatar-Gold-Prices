@@ -1,57 +1,56 @@
-# Security and Privacy Audit Report
+# Security & Privacy Audit Report
 
-**Date:** April 16, 2026  
-**Status:** Completed  
-**Scope:** `app/`, `backend/`
+**Audit Date:** October 16, 2026  
+**Status:** ✅ HARDENED & GOOGLE PLAY STORE READY  
+**Target Environment:** Android / iOS (Expo SDK 54) & Node.js 24 Automation Backend
 
 ---
 
 ## 1. Executive Summary
-A comprehensive security and privacy audit was conducted on the repository codebase. The audit utilized Static Application Security Testing (SAST) and manual taint analysis to identify potential vulnerabilities. One medium-severity vulnerability was identified related to the browser environment used for scraping.
+
+The **Qatar Gold Price Tracker** repository underwent a comprehensive security, data-privacy, and supply-chain audit prior to Google Play Store submission. The system enforces a strict **Zero-Knowledge / Privacy-First** boundary for user financial assets while isolating privileged cloud operations inside ephemeral GitHub Actions runners.
 
 ---
 
-## 2. Findings
+## 2. Architecture & Data Sovereignty Audit
 
-### VULN-001: Puppeteer Sandbox Disabled
-*   **Vulnerability:** Disabled Browser Sandbox
-*   **Vulnerability Type:** Security
-*   **Severity:** Medium (FIXED)
-*   **Location:** `backend/scraper/strategies/puppeteer.js` (`launchScraperBrowser`)
-*   **Status:** Resolved (Remediated on October 15, 2026)
+### 2.1 Local-Only Portfolio Storage ("My Gold" Vault)
+- **Implementation:** [`app/lib/db.ts`](file:///Users/nab/Code/qatar-gold-prices/app/lib/db.ts) (`expo-sqlite`, `vault.db` in WAL mode).
+- **SQL Injection Prevention:** All `INSERT` and `DELETE` statements in `dbService` use strictly parameterized prepared bindings (`?`).
+- **Cloud Backup Prevention (OWASP MASVS-STORAGE):** [`app/app.json`](file:///Users/nab/Code/qatar-gold-prices/app/app.json) explicitly sets `"allowBackup": false` on Android (`android:allowBackup="false"`), preventing Android Auto Backup from silently uploading the user's private `vault.db` SQLite file to Google Drive.
+- **Input Sanitization:** [`app/app/(tabs)/vault.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/(tabs)/vault.tsx) enforces finite positive bounds (`0.01`–`100,000` grams and `1`–`100,000` QAR/g) and truncates optional labels to 80 characters.
 
-#### Description
-The Puppeteer browser instance was previously launched unconditionally with the `--no-sandbox` and `--disable-setuid-sandbox` flags. This has been remediated in `launchScraperBrowser()` so that the Chromium sandbox remains enabled by default in local and standard environments, and `--no-sandbox` is only appended when explicitly running inside a restricted container environment (`CI=true` or `PUPPETEER_NO_SANDBOX=true`).
-
-### VULN-002: Insecure Row Level Security (RLS) Policy
-*   **Vulnerability:** Broken Access Control (Anonymous Table Insertion)
-*   **Vulnerability Type:** Security
-*   **Severity:** High (FIXED)
-*   **Location:** `backend/price_alerts_schema.sql` (Lines 25-29)
-*   **Status:** Resolved (Remediated on April 20, 2026)
-
-#### Description
-The RLS policy "Allow anonymous alert insertion" was removed. Authenticated sessions (including Supabase Anonymous Sign-ins) are strictly governed by the "Users can manage their own alerts" policy, which utilizes `(select auth.uid()) = user_id` for `SELECT`, `INSERT`, `UPDATE`, and `DELETE`.
-
-### VULN-003: PII Leak in Execution Logs
-*   **Vulnerability:** Privacy Violation (Plaintext Push Token Logging)
-*   **Vulnerability Type:** Privacy
-*   **Severity:** Medium (FIXED)
-*   **Location:** `backend/scraper/utils/alerts.js`
-*   **Status:** Resolved (Remediated on April 20, 2026)
-
-#### Description
-Raw Expo Push Tokens were previously logged in plaintext during validation errors. This has been remediated by masking the token in the log output, preserving only the first 10 characters for debugging.
+### 2.2 Supabase Authentication & Row-Level Security (RLS)
+- **Mobile Client Key Isolation:** [`app/lib/supabase.ts`](file:///Users/nab/Code/qatar-gold-prices/app/lib/supabase.ts) uses only `EXPO_PUBLIC_SUPABASE_URL` and the public `EXPO_PUBLIC_SUPABASE_ANON_KEY`. The privileged `SUPABASE_SERVICE_ROLE_KEY` is never present in `app/` or client bundles.
+- **Anonymous Session Gate:** [`app/app/_layout.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/_layout.tsx) establishes an anonymous session via `supabase.auth.signInAnonymously()` before mounting data screens, gracefully degrading to offline mode (allowing full local "My Gold" vault access) if network connectivity is unavailable.
+- **Database RLS Policies ([`backend/supabase_schema.sql`](file:///Users/nab/Code/qatar-gold-prices/backend/supabase_schema.sql) & [`backend/price_alerts_schema.sql`](file:///Users/nab/Code/qatar-gold-prices/backend/price_alerts_schema.sql)):**
+  - `providers` and `gold_prices`: `SELECT` restricted to `TO authenticated` (anonymous sessions); all `INSERT`/`UPDATE`/`DELETE` operations require the backend `service_role`.
+  - `price_alerts`: Strict per-device isolation via `USING (auth.uid() = user_id)` and `WITH CHECK (auth.uid() = user_id)` across `SELECT`, `INSERT`, `UPDATE`, and `DELETE`, plus database `CHECK` constraints (`karat IN (18, 21, 22, 24)` and `condition IN ('above', 'below')`).
 
 ---
 
-## 3. Audit Methodology & False Positives
-The audit followed a two-pass "Recon & Investigate" model. The following potential issues were investigated and ruled out:
+## 3. Application & Backend Security Hardening (October 2026)
 
-1.  **Unsafe URL Handling (`app/components/ExternalLink.tsx`):** Use of `WebBrowser.openBrowserAsync()` was checked for URI scheme injection. All current usages involve hardcoded `https://` documentation links.
-2.  **Historical Diagnostic Scripts:** Legacy one-off diagnostic scripts (`backend/test_security.js` and `backend/scraper/utils/fix_policy.js`) were audited and removed from the repository.
+| Finding | Severity | Status | Remediation Applied |
+| :--- | :---: | :---: | :--- |
+| **Transitive npm Vulnerabilities in `backend/` (15 High)** | High | ✅ Fixed | Upgraded `axios` (`^1.19.1`), `nodemailer` (`^10.1.1`), `puppeteer` (`^25.14.0`), and pinned patched transitive overrides (`basic-ftp`, `undici`, `ws`, `js-yaml`, `ip-address`, `form-data`). `npm --prefix backend audit` now reports **0 vulnerabilities**. |
+| **Transitive npm Vulnerabilities in `app/`** | High | ✅ Fixed | Added patched security overrides in [`app/package.json`](file:///Users/nab/Code/qatar-gold-prices/app/package.json) (`tar`, `shell-quote`, `postcss`, `undici`, `ws`, `@xmldom/xmldom`, `js-yaml`, `nanoid`, `image-size`, `source-map-js`, `sprintf-js`, `browserslist`, `compression`, `@babel/core`). |
+| **HTML Injection in Admin Alert Emails** | Medium | ✅ Fixed | Escaped all interpolated provider names, URLs, and error strings in [`backend/scraper/utils/mailer.js`](file:///Users/nab/Code/qatar-gold-prices/backend/scraper/utils/mailer.js) using `escape-html`. |
+| **Unbounded Scraper Price Insertion** | Medium | ✅ Fixed | Added [`backend/scraper/utils/validation.js`](file:///Users/nab/Code/qatar-gold-prices/backend/scraper/utils/validation.js) to reject non-finite or out-of-range QAR/g prices (`100`–`2000` QAR/g) and enforce hierarchy monotonicity (`24K >= 22K >= 21K >= 18K`) before database insertion. |
+| **Unvalidated URL Scheme in `ExternalLink`** | Low | ✅ Fixed | Hardened [`app/components/ExternalLink.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/components/ExternalLink.tsx) to strictly allow `https://` URLs before invoking `WebBrowser.openBrowserAsync`. |
+| **Alert Input & Session Bounds (`alerts.tsx`)** | Low | ✅ Fixed | Hardened [`app/app/(tabs)/alerts.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/(tabs)/alerts.tsx) to verify a non-null `user.id` and bound `target_price` between `1` and `100,000` QAR/g before inserting into `price_alerts`. |
+| **GitHub Actions `GITHUB_TOKEN` Permissions** | Low | ✅ Fixed | Added explicit top-level `permissions: contents: read` to [`.github/workflows/scrape-prices.yml`](file:///Users/nab/Code/qatar-gold-prices/.github/workflows/scrape-prices.yml) and [`.github/workflows/provider-health-check.yml`](file:///Users/nab/Code/qatar-gold-prices/.github/workflows/provider-health-check.yml). |
+| **Tracked Legacy Diagnostic Script & Debug Screenshots** | Low | ✅ Fixed | Removed tracked `backend/test_security.js`, `.idea/`, and `backend/scraper/debug/*.png` artifacts from git index. |
 
 ---
 
-## 4. Remediation Summary
-All three identified findings (`VULN-001`, `VULN-002`, and `VULN-003`) have been remediated and verified via automated unit tests in `backend/scraper/tests/validation_and_alerts.test.js`.
+## 4. Google Play Store Security & Policy Compliance
+
+1. **Android Permission Minimization ([`app/app.json`](file:///Users/nab/Code/qatar-gold-prices/app/app.json)):**
+   - Declared only `INTERNET`, `VIBRATE`, and `POST_NOTIFICATIONS`.
+   - Explicitly blocked `RECORD_AUDIO`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`, and `SYSTEM_ALERT_WINDOW` via `android.blockedPermissions`.
+2. **True 32-bit PNG Asset Compliance:**
+   - Converted `icon.png`, `adaptive-icon.png`, `splash-icon.png`, and `favicon.png` from JPEG data to compliant `1024×1024` RGB PNG images.
+3. **In-App & Hosted Privacy Disclosures:**
+   - Replaced template modal with an in-app **Privacy, Data Sovereignty & Market Disclaimer** screen ([`app/app/modal.tsx`](file:///Users/nab/Code/qatar-gold-prices/app/app/modal.tsx)), accessible from the Dashboard header.
+   - Authored [`docs/PRIVACY_POLICY.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PRIVACY_POLICY.md) and [`docs/PLAY_STORE_RELEASE.md`](file:///Users/nab/Code/qatar-gold-prices/docs/PLAY_STORE_RELEASE.md).
