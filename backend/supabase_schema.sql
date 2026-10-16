@@ -25,7 +25,7 @@ create table gold_prices (
   id bigint primary key generated always as identity,
   provider_id uuid references providers(id) on delete cascade,
   karat integer not null check (karat in (24, 22, 21, 18)),
-  price decimal(10, 2) not null,
+  price decimal(10, 2) not null check (price >= 100 and price <= 2000),
   currency text default 'QAR',
   scraped_at timestamptz default now()
 );
