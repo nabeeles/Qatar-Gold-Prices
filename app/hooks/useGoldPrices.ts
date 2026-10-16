@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { deduplicateLatestPrices, getHistoricalCutoffIso } from '../lib/priceUtils';
+import {
+  aggregateHistoricalPrices,
+  deduplicateLatestPrices,
+  getHistoricalCutoffIso,
+  PriceRowLike,
+} from '../lib/priceUtils';
 
 /**
  * Interface representing a gold market synchronization record.
@@ -59,35 +64,33 @@ export function useHistoricalPrices(karat: number = 24) {
         console.warn('Supabase not initialized, returning mock/empty data');
         return [];
       }
-      const { data, error } = await supabase
-        .from('gold_prices')
-        .select('price, scraped_at, provider:providers!inner(name, is_active)')
-        .eq('karat', karat)
-        .eq('provider.is_active', true)
-        .gte('scraped_at', getHistoricalCutoffIso(35))
-        .order('scraped_at', { ascending: false })
-        .limit(5000);
 
-      if (error) throw error;
+      const cutoffIso = getHistoricalCutoffIso(365);
+      const pageSize = 1000;
+      const maxPages = 5;
+      const allRows: PriceRowLike[] = [];
 
-      // Logic: Aggregate by calendar date and compute daily spot average.
-      const dailyMap: Record<string, { total: number; count: number; timestamp: number }> = {};
-      
-      data.forEach(item => {
-          const date = item.scraped_at.split('T')[0];
-          if (!dailyMap[date]) {
-              dailyMap[date] = { total: 0, count: 0, timestamp: new Date(item.scraped_at).getTime() };
-          }
-          dailyMap[date].total += item.price;
-          dailyMap[date].count += 1;
-      });
+      for (let page = 0; page < maxPages; page++) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+        const { data, error } = await supabase
+          .from('gold_prices')
+          .select('price, scraped_at, provider:providers!inner(name, is_active)')
+          .eq('karat', karat)
+          .eq('provider.is_active', true)
+          .gte('scraped_at', cutoffIso)
+          .order('scraped_at', { ascending: false })
+          .range(from, to);
 
-      return Object.values(dailyMap)
-        .map(day => ({
-            value: day.total / day.count,
-            timestamp: day.timestamp
-        }))
-        .sort((a, b) => a.timestamp - b.timestamp);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allRows.push(...(data as unknown as PriceRowLike[]));
+        if (data.length < pageSize) break;
+      }
+
+      return aggregateHistoricalPrices(allRows);
     },
   });
 }
+

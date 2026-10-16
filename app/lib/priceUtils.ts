@@ -78,7 +78,114 @@ export function computeMarketAverages<T extends PriceRowLike>(rows: T[]): Record
 /**
  * Returns an ISO-8601 UTC timestamp `days` prior to `now` for bounding historical queries.
  */
-export function getHistoricalCutoffIso(days = 35, now: Date = new Date()): string {
+export function getHistoricalCutoffIso(days = 365, now: Date = new Date()): string {
   const ms = days * 24 * 60 * 60 * 1000;
   return new Date(now.getTime() - ms).toISOString();
 }
+
+export interface HistoricalPoint {
+  timestamp: number;
+  value: number;
+}
+
+/**
+ * Aggregates raw `gold_prices` rows by calendar day into spot average points,
+ * sorted ascending by timestamp. If all rows belong to a single calendar day
+ * with multiple intraday scrape batches, falls back to minute-level batch buckets.
+ */
+export function aggregateHistoricalPrices<T extends { price?: number; price_per_gram?: number; scraped_at?: string }>(
+  rows: T[]
+): HistoricalPoint[] {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const dailyMap: Record<string, { total: number; count: number; timestamp: number }> = {};
+  const batchMap: Record<string, { total: number; count: number; timestamp: number }> = {};
+
+  for (const item of rows) {
+    if (!item || !item.scraped_at) continue;
+    const price = Number(item.price ?? item.price_per_gram ?? 0);
+    const ts = new Date(item.scraped_at).getTime();
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(ts)) continue;
+
+    const dateKey = item.scraped_at.split('T')[0];
+    if (!dailyMap[dateKey]) {
+      dailyMap[dateKey] = { total: 0, count: 0, timestamp: ts };
+    } else if (ts > dailyMap[dateKey].timestamp) {
+      dailyMap[dateKey].timestamp = ts;
+    }
+    dailyMap[dateKey].total += price;
+    dailyMap[dateKey].count += 1;
+
+    const batchKey = item.scraped_at.slice(0, 16);
+    if (!batchMap[batchKey]) {
+      batchMap[batchKey] = { total: 0, count: 0, timestamp: ts };
+    } else if (ts > batchMap[batchKey].timestamp) {
+      batchMap[batchKey].timestamp = ts;
+    }
+    batchMap[batchKey].total += price;
+    batchMap[batchKey].count += 1;
+  }
+
+  const dailyPoints = Object.values(dailyMap)
+    .map((day) => ({
+      value: day.total / day.count,
+      timestamp: day.timestamp,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (dailyPoints.length >= 2) {
+    return dailyPoints;
+  }
+
+  const batchPoints = Object.values(batchMap)
+    .map((batch) => ({
+      value: batch.total / batch.count,
+      timestamp: batch.timestamp,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  return batchPoints.length >= 2 ? batchPoints : dailyPoints;
+}
+
+/**
+ * Filters aggregated historical points for the selected timeframe (`7d`, `30d`, `365d`).
+ *
+ * When recent scrapes are sparse and fewer than 2 points fall inside the strict
+ * calendar cutoff window, falls back to the most recent recorded points so that
+ * `LineChart` always receives a valid >= 2 point series whenever historical data exists.
+ */
+export function filterHistoricalByTimeframe(
+  points: HistoricalPoint[],
+  timeframe: string,
+  nowMs: number = Date.now()
+): HistoricalPoint[] {
+  if (!Array.isArray(points) || points.length === 0) return [];
+
+  const valid = points
+    .filter((d) => d && Number.isFinite(d.timestamp) && Number.isFinite(Number(d.value)) && Number(d.value) > 0)
+    .map((d) => ({ timestamp: d.timestamp, value: Number(d.value) }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (valid.length === 0) return [];
+
+  const days = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : 365;
+  const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
+
+  if (valid.length === 1) {
+    const only = valid[0];
+    const anchorTimestamp = Math.min(cutoff, only.timestamp - 24 * 60 * 60 * 1000);
+    return [
+      { timestamp: anchorTimestamp, value: only.value },
+      only,
+    ];
+  }
+
+  const inWindow = valid.filter((d) => d.timestamp >= cutoff);
+  if (inWindow.length >= 2) {
+    return inWindow;
+  }
+
+  const fallbackCount = Math.max(2, Math.min(valid.length, days));
+  return valid.slice(-fallbackCount);
+}
+

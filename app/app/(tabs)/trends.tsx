@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, TouchableOpacity, Dimensions, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHistoricalPrices } from '../../hooks/useGoldPrices';
 import { formatCurrency } from '../../lib/format';
+import { filterHistoricalByTimeframe } from '../../lib/priceUtils';
 import { LineChart } from 'react-native-wagmi-charts';
 import { LineChart as ChartIcon, Calendar } from 'lucide-react-native';
 
@@ -32,26 +33,14 @@ const PURITIES = [
 export default function Trends() {
   const [selectedPurity, setSelectedPurity] = useState(24);
   const [selectedTimeframe, setSelectedTimeframe] = useState('30d');
-  const { data, isLoading, error } = useHistoricalPrices(selectedPurity);
+  const { data, isLoading, error, refetch, isRefetching } = useHistoricalPrices(selectedPurity);
 
   // Filter and format data based on selected timeframe for the chart
   const chartData = useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) return [];
     
     try {
-      const now = Date.now();
-      let cutoff = 0;
-      
-      if (selectedTimeframe === '7d') cutoff = now - (7 * 24 * 60 * 60 * 1000);
-      else if (selectedTimeframe === '30d') cutoff = now - (30 * 24 * 60 * 60 * 1000);
-      else if (selectedTimeframe === '365d') cutoff = now - (365 * 24 * 60 * 60 * 1000);
-      
-      return data
-        .filter(d => d && d.timestamp >= cutoff)
-        .map(d => ({
-          timestamp: d.timestamp,
-          value: Number(d.value) || 0
-        }));
+      return filterHistoricalByTimeframe(data, selectedTimeframe);
     } catch (err) {
       console.error('Error processing chart data:', err);
       return [];
@@ -60,7 +49,7 @@ export default function Trends() {
 
   const stats = useMemo(() => {
     if (chartData.length === 0) {
-      return { current: 0, high: 0, low: 0, change: 0, percent: 0 };
+      return { current: 0, high: 0, low: 0, change: 0, percent: 0, latestTimestamp: 0 };
     }
     const values = chartData.map(d => d.value);
     const first = values[0];
@@ -69,8 +58,28 @@ export default function Trends() {
     const low = Math.min(...values);
     const change = current - first;
     const percent = first > 0 ? (change / first) * 100 : 0;
-    return { current, high, low, change, percent };
+    const latestTimestamp = chartData[chartData.length - 1]?.timestamp || 0;
+    return { current, high, low, change, percent, latestTimestamp };
   }, [chartData]);
+
+  const defaultPriceText = `QAR ${formatCurrency(stats.current)}`;
+  const defaultDateText = stats.latestTimestamp
+    ? new Date(stats.latestTimestamp).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : '';
+
+  const yRange = useMemo(() => {
+    if (chartData.length > 1 && stats.high === stats.low) {
+      return {
+        min: Math.max(0, stats.low - 1),
+        max: stats.high + 1,
+      };
+    }
+    return undefined;
+  }, [chartData.length, stats.high, stats.low]);
 
   if (isLoading) {
     return (
@@ -83,14 +92,32 @@ export default function Trends() {
   if (error) {
     return (
       <View style={{ flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-        <Text style={{ color: 'red' }}>Error loading data: {(error as Error).message}</Text>
+        <Text style={{ color: '#F87171', marginBottom: 16, textAlign: 'center' }}>
+          Error loading data: {(error as Error).message}
+        </Text>
+        <TouchableOpacity
+          onPress={() => refetch()}
+          style={{ backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 }}
+        >
+          <Text style={{ color: '#000000', fontWeight: 'bold' }}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor="#D4AF37"
+          />
+        }
+      >
         <View style={{ paddingHorizontal: 24, paddingTop: 32 }}>
           <Text style={{ color: '#A0A0A0', fontSize: 12, textTransform: 'uppercase', letterSpacing: 4, marginBottom: 4, fontWeight: '600' }}>
             Market Analytics
@@ -149,12 +176,16 @@ export default function Trends() {
           {/* Interactive Chart Container */}
           <View style={{ backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', borderRadius: 24, padding: 20, marginBottom: 24 }}>
             {chartData.length > 1 ? (
-              <LineChart.Provider data={chartData}>
+              <LineChart.Provider
+                key={`${selectedPurity}-${selectedTimeframe}-${chartData.length}`}
+                data={chartData}
+                yRange={yRange}
+              >
                 <View style={{ marginBottom: 20 }}>
                   <LineChart.PriceText 
                     format={({ value }) => {
                       'worklet';
-                      return value ? `QAR ${parseFloat(value).toFixed(2)}` : '--';
+                      return value ? `QAR ${parseFloat(value).toFixed(2)}` : defaultPriceText;
                     }}
                     style={{ color: '#D4AF37', fontSize: 28, fontWeight: 'bold' }} 
                   />
@@ -164,6 +195,10 @@ export default function Trends() {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',
+                    }}
+                    format={({ value, formatted }) => {
+                      'worklet';
+                      return value > 0 && formatted ? formatted : defaultDateText;
                     }}
                   />
                 </View>
@@ -178,9 +213,17 @@ export default function Trends() {
                 </LineChart>
               </LineChart.Provider>
             ) : (
-              <View style={{ height: 280, justifyContent: 'center', alignItems: 'center' }}>
-                <ActivityIndicator color="#D4AF37" />
-                <Text style={{ color: '#A0A0A0', marginTop: 12 }}>Optimizing market data...</Text>
+              <View style={{ height: 280, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 }}>
+                <ChartIcon size={32} color="#666666" />
+                <Text style={{ color: '#A0A0A0', marginTop: 12, textAlign: 'center' }}>
+                  No historical price data available for {selectedPurity}K gold yet.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => refetch()}
+                  style={{ marginTop: 16, backgroundColor: '#262626', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#404040' }}
+                >
+                  <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600' }}>Refresh Data</Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
