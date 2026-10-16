@@ -1,16 +1,12 @@
 -- 1. Reconcile 'providers' RLS policies so inactive providers are hidden from mobile clients
-do $$
-declare
-  pol record;
-begin
-  for pol in
-    select policyname from pg_policies where schemaname = 'public' and tablename = 'providers'
-  loop
-    execute format('drop policy if exists %I on public.providers', pol.policyname);
-  end loop;
-end $$;
-
 alter table public.providers enable row level security;
+
+drop policy if exists "No public/app access to providers" on public.providers;
+drop policy if exists "Authenticated users can read providers" on public.providers;
+drop policy if exists "Authenticated users can read active providers" on public.providers;
+drop policy if exists "Unauthenticated users cannot read providers" on public.providers;
+drop policy if exists "Enable read access for all users" on public.providers;
+drop policy if exists "Allow public read access" on public.providers;
 
 create policy "Authenticated users can read active providers"
   on public.providers for select
@@ -23,18 +19,10 @@ create policy "Unauthenticated users cannot read providers"
   using (false);
 
 -- 2. Reconcile 'price_alerts' RLS policies to block cross-user user_id spoofing on INSERT/UPDATE
-do $$
-declare
-  pol record;
-begin
-  for pol in
-    select policyname from pg_policies where schemaname = 'public' and tablename = 'price_alerts'
-  loop
-    execute format('drop policy if exists %I on public.price_alerts', pol.policyname);
-  end loop;
-end $$;
-
 alter table public.price_alerts enable row level security;
+
+drop policy if exists "Allow anonymous alert insertion" on public.price_alerts;
+drop policy if exists "Users can manage their own alerts" on public.price_alerts;
 
 create policy "Users can manage their own alerts"
   on public.price_alerts for all
@@ -49,3 +37,4 @@ alter table public.gold_prices
 alter table public.gold_prices
   add constraint gold_prices_price_bounds_check
   check (price >= 100 and price <= 2000);
+
