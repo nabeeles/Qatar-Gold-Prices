@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test scraper/tests/*.test.js"
+    "test": "node --test scraper/tests/*.test.js",
+    "verify:db": "node scripts/verify_supabase_production.js"
   },
   "keywords": [],
   "author": "",
