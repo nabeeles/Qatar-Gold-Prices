@@ -65,8 +65,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "63513328-d851-4bf8-bb4e-e0a3c121e669"
+        "projectId": "e5d2ce98-28b2-4d1c-ac84-21db87183793"
       }
-    }
+    },
+    "owner": "nabeeles"
   }
 }

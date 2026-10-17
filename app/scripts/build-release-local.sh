@@ -23,4 +23,9 @@ if [[ -z "${EXPO_PUBLIC_SUPABASE_URL:-}" || -z "${EXPO_PUBLIC_SUPABASE_ANON_KEY:
 fi
 
 echo "Building Android release artifact with profile='${PROFILE}' (--local)..."
-npx eas-cli build --platform android --profile "${PROFILE}" --local
+if command -v eas >/dev/null 2>&1; then
+  eas build --platform android --profile "${PROFILE}" --local
+else
+  npx eas-cli build --platform android --profile "${PROFILE}" --local
+fi
+
