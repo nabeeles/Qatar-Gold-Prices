@@ -38,8 +38,8 @@ Instead of relying on fragile CSS selectors (e.g., `.price-value`), the engine s
 ### 2. Monotonic Purity Hierarchy (`validateProviderPrices` & `normalizePriceMap`)
 Before any provider's extracted rates are accepted, `validateProviderPrices` and `normalizePriceMap` verify that all present karats obey strict monotonic ordering (`24K >= 22K >= 21K >= 18K`). If a corrupted DOM scrape violates this hierarchy, the extraction is rejected and the orchestrator triggers a failure alert.
 
-### 3. Multi-Column Mapping
-For tabular data, the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned.
+### 3. Multi-Column & Multi-Table Mapping
+For tabular data, the scraper maps header indices to data row indices dynamically, ensuring that if a new karat column is added, existing extractions remain aligned. For multi-table aggregator pages such as `goodreturns.in`, `extractPricesFromHtml` scans all `.gold-each-container` tables, verifies explicit `QAR` currency headers (ignoring secondary INR tables and 10-day historical comparison tables), and targets the `1 Gram` / `Today` column while rejecting signed price-change deltas.
 
 ---
 

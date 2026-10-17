@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1] - 2026-10-17
+
+### Changed
+- **Direct Extraction Integrity (`backend/scraper/index.js`, `backend/scraper/utils/mailer.js`)**: Removed third-party `goldpriceqatar.com` aggregator fallback substitution for direct retail providers. Direct extraction failures or incomplete rate sets (`24K`/`22K`) now trigger an immediate failure alert email without persisting third-party substitute rates.
+
+### Fixed
+- **Al Fardan Exchange 2-Tier Direct Extraction (`backend/scraper/strategies/puppeteer.js`)**: Added Tier 1 fast-path JSON API extraction (`fetchAlFardanDirectApi` against `GET /api/gold-rates` in `<400ms`) for 1g 24K Fortuna Bar and 7.98g 22K Sovereign Coin rates, and hardened Tier 2 browser extraction with `evaluateOnNewDocument` timer initialization (`window.forex_refresh = 3600`, `window.refresh = 3600`) to prevent the storefront's `setInterval(..., NaN)` XHR flood from freezing Chromium.
+- **Malabar Gold GeoIP Store Redirects (`backend/scraper/strategies/puppeteer.js`)**: Updated `fetchMalabarDirectApi` and `resolveMalabarGoldPriceUrl` to iterate across regional store views (`/ae/`, `/us/`, `/uk/`) so GitHub Actions US runners bypass Magento GeoIP homepage redirects.
+- **GoodReturns Multi-Table QAR Disambiguation (`backend/scraper/strategies/cheerio.js`)**: Updated `extractPricesFromHtml` to scan all `.gold-each-container` tables, verify explicit `QAR` currency headers (ignoring INR and 10-day history tables), and extract `1 Gram` / `Today` rates while ignoring signed price-change deltas.
+
 ## [1.4.0] - 2026-10-16
 
 ### Added

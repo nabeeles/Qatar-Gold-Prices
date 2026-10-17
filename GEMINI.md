@@ -8,7 +8,7 @@
 ## 🤖 AI Workflow & Architecture
 ### Scraper Orchestration (Direct Extraction)
 - **Engine Dispatch:** The system dynamically routes providers to either `Puppeteer` (Direct retail) or `Cheerio` (Aggregator) based on the database `scraping_type`.
-- **Multi-Tier Direct Extraction:** For Malabar Gold, the scraper attempts Tier 1 fast-path JSON API extraction across regional store views (`/ae/`, `/us/`, `/uk/`) to handle GeoIP redirects on cloud runners, cascading to Tier 2 interactive browser UI automation if needed. No third-party aggregator fallback is substituted for direct retail providers.
+- **Multi-Tier Direct Extraction:** For Malabar Gold (GeoIP-aware regional store views `/ae/`, `/us/`, `/uk/`) and Al Fardan Exchange (`GET /api/gold-rates`), the scraper attempts Tier 1 fast-path JSON API extraction first, cascading to Tier 2 interactive browser UI automation if needed. No third-party aggregator fallback is substituted for direct retail providers.
 - **Fail-Safe Notifications:** Every primary extraction failure MUST trigger an immediate email notification to the administrator via `sendFallbackAlert`.
 
 ### Mobile Frontend

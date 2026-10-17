@@ -6,7 +6,7 @@ A premium, privacy-first mobile application to track real-time gold market data 
 
 ## ✨ Features
 
-- **📍 Resilient Scraping:** Dual-engine architecture (Puppeteer & Cheerio) with a **Direct-with-Fallback** safety net for critical providers like Malabar Gold.
+- **📍 Resilient Scraping:** Dual-engine architecture (Puppeteer & Cheerio) with **2-Tier Direct Extraction** (fast-path JSON APIs + interactive browser automation) for retail providers like Malabar Gold and Al Fardan Exchange.
 - **🛡️ Privacy-First Portfolio:** A secure, **Local-Only** vault to track your gold assets (Weight, Karat, Purchase Price). Your data never leaves your device.
 - **🕒 Real-time Market Feed:** Aggregated 24K, 22K, 21K, and 18K gold rates synchronized every hour from 5 reliable sources.
 - **📈 Performance Analytics:** Instant ROI and profit/loss calculation based on live deduplicated market averages.
@@ -33,7 +33,7 @@ A premium, privacy-first mobile application to track real-time gold market data 
 ## 📂 Documentation
 
 - **[Architecture Overview](docs/ARCHITECTURE.md):** The robust system design and data sovereignty model.
-- **[Scraping Strategy](docs/SCRAPING.md):** Detailed heuristics and aggregator fail-safe logic.
+- **[Scraping Strategy](docs/SCRAPING.md):** Multi-tier direct extraction, heuristics, and failure notification logic.
 - **[API & Schema Reference](docs/API.md):** Supabase schema, RLS policies, and data hooks.
 - **[Setup & Deployment](docs/SETUP.md):** Instructions for local EAS builds, testing, and environment injection.
 - **[Google Play Store Release Guide](docs/PLAY_STORE_RELEASE.md):** Store listing assets, Data Safety answers, and release build steps.
