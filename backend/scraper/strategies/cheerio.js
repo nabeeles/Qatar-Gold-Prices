@@ -18,36 +18,6 @@ function extractPricesFromHtml(html, provider) {
   const results = {};
 
   /**
-   * DOM-Specific Strategy: goldpriceqatar.com (Primary Fallback Aggregator)
-   */
-  if (provider.url.includes('goldpriceqatar.com')) {
-    console.log('   [Aggregator] Applying high-fidelity table extraction for goldpriceqatar.com...');
-    $('tr').each((i, row) => {
-      const text = $(row).text().replace(/\s+/g, ' ');
-      const cells = $(row).find('td');
-
-      if (text.includes('1 Gram') && cells.length >= 3) {
-        const p22 = $(cells[1]).text().replace(/[^0-9.]/g, '');
-        const p24 = $(cells[2]).text().replace(/[^0-9.]/g, '');
-        if (isValidGoldPrice(p22)) results['22k'] = p22;
-        if (isValidGoldPrice(p24)) results['24k'] = p24;
-      }
-
-      if (text.includes('18K Gold') && cells.length >= 2) {
-        const p18 = $(cells[1]).text().replace(/[^0-9.]/g, '');
-        if (isValidGoldPrice(p18)) results['18k'] = p18;
-      }
-      if (text.includes('21K Gold') && cells.length >= 2) {
-        const p21 = $(cells[1]).text().replace(/[^0-9.]/g, '');
-        if (isValidGoldPrice(p21)) results['21k'] = p21;
-      }
-    });
-
-    const validated = normalizePriceMap(results);
-    if (Object.keys(validated).length > 0) return validated;
-  }
-
-  /**
    * DOM-Specific Strategy: livepriceofgold.com
    */
   if (provider.url.includes('livepriceofgold.com')) {

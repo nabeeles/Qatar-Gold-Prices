@@ -3,19 +3,19 @@ const { scrapeWithPuppeteer, launchScraperBrowser } = require('./strategies/pupp
 const { scrapeWithCheerio } = require('./strategies/cheerio');
 const { checkAndSendAlerts } = require('./utils/alerts');
 const { sendFallbackAlert } = require('./utils/mailer');
-const { isFallbackEligible, normalizePriceMap } = require('./utils/validation');
+const { isFallbackEligible } = require('./utils/validation');
 
 /**
  * Scraper Orchestrator (index.js)
  * 
  * Capability Overview:
  * Executes the global market synchronization lifecycle. Manages dynamic engine 
- * dispatching, data persistence, and intelligent fail-over for critical providers.
+ * dispatching, strict price validation, data persistence, and failure alerting.
  * 
  * Orchestration Flow:
  * 1. SYNC: Retrieves the active provider registry from Supabase.
  * 2. DISPATCH: Routes tasks to Puppeteer (Direct) or Cheerio (Aggregator) based on metadata.
- * 3. FAIL-SAFE: Executes a "Primary-with-Fallback" pivot for high-impact sources.
+ * 3. VALIDATE & ALERT: Verifies complete 24K & 22K extraction and alerts on primary source failure.
  * 4. LEDGER: Persists validated market rates into the historical ledger.
  * 5. ALERT: Aggregates spot averages and triggers user threshold notifications.
  */
@@ -35,13 +35,10 @@ async function runScraper() {
     }
 
     const allScrapedPrices = [];
-    let cachedFallbackPrices = undefined;
-    let fallbackPushedToAlerts = false;
 
     for (const provider of providers) {
       try {
         let prices = null;
-        let usedFallback = false;
         let primaryError = null;
 
         // --- PHASE 1: Primary Extraction ---
@@ -55,54 +52,13 @@ async function runScraper() {
           console.error(`   ❌ Primary strategy failed for ${provider.name}: ${primaryError}`);
         }
 
-        // --- PHASE 2: Intelligent Fallback (Critical Vendors) ---
-        // If direct extraction fails or returns partial rates, we pivot to the high-fidelity aggregator (goldpriceqatar.com).
-        // This guarantees continuous price availability even if corporate firewalls block cloud IP ranges.
-        const needsFallback = isFallbackEligible(prices);
-        const isCriticalVendor =
-          provider.name.includes('Malabar') ||
-          provider.name.includes('Al Fardan') ||
-          provider.name.includes('Joyalukkas');
-        const primaryReason = primaryError || 'Primary extraction returned empty or partial rates (missing 24K or 22K).';
-
-        if (needsFallback && isCriticalVendor) {
-          console.log(`   [Info] ${provider.name} direct extraction is restricted or failed in this environment. Pivoting to high-fidelity aggregator...`);
-
-          if (cachedFallbackPrices === undefined) {
-            const fallbackProvider = {
-              ...provider,
-              url: 'https://goldpriceqatar.com/',
-              selectors: { '24k': '24K', '22k': '22K' }
-            };
-            try {
-              cachedFallbackPrices = await scrapeWithCheerio(fallbackProvider);
-            } catch (fallbackErr) {
-              console.error(`   ❌ Fallback strategy failed: ${fallbackErr.message}`);
-              cachedFallbackPrices = null;
-            }
-          }
-
-          let mergedPrices = cachedFallbackPrices
-            ? normalizePriceMap({ ...cachedFallbackPrices, ...(prices || {}) })
-            : null;
-          if (isFallbackEligible(mergedPrices) && cachedFallbackPrices) {
-            mergedPrices = normalizePriceMap(cachedFallbackPrices);
-          }
-
-          if (mergedPrices && !isFallbackEligible(mergedPrices)) {
-            prices = mergedPrices;
-            usedFallback = true;
-            console.log(`   ✅ ${provider.name} prices synchronized via verified aggregator.`);
-            await sendFallbackAlert(provider.name, primaryReason, true);
-          } else {
-            await sendFallbackAlert(
-              provider.name,
-              `${primaryReason} | All extraction paths (Direct + Aggregator) failed.`,
-              false
-            );
-          }
-        } else if (needsFallback) {
+        // --- PHASE 2: Validation & Failure Notification ---
+        const extractionFailed = isFallbackEligible(prices);
+        if (extractionFailed) {
+          const primaryReason = primaryError || 'Primary extraction returned empty or partial rates (missing 24K or 22K).';
+          console.warn(`⚠️  Extraction failed for ${provider.name}: ${primaryReason}`);
           await sendFallbackAlert(provider.name, primaryReason, false);
+          continue;
         }
 
         // --- PHASE 3: Ledger Persistence ---
@@ -110,17 +66,12 @@ async function runScraper() {
           console.log(`✅ Extracted prices for ${provider.name}:`, prices);
           await savePrices(provider.id, prices);
 
-          if (!usedFallback || !fallbackPushedToAlerts) {
-            Object.keys(prices).forEach(key => {
-              const m = key.match(/^(\d+)k$/i);
-              if (m && prices[key]) {
-                allScrapedPrices.push({ karat: parseInt(m[1], 10), price: parseFloat(prices[key]) });
-              }
-            });
-            if (usedFallback) {
-              fallbackPushedToAlerts = true;
+          Object.keys(prices).forEach(key => {
+            const m = key.match(/^(\d+)k$/i);
+            if (m && prices[key]) {
+              allScrapedPrices.push({ karat: parseInt(m[1], 10), price: parseFloat(prices[key]) });
             }
-          }
+          });
 
           console.log(`💾 Saved to database.`);
         } else {

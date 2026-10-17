@@ -67,14 +67,84 @@ test('formatAlertPrice formats notification prices to strictly 2 decimal places'
   assert.equal(formatAlertPrice(320.456), '320.46');
 });
 
-test('buildFallbackEmailContent differentiates fallback success vs critical total failure', () => {
-  const okMail = buildFallbackEmailContent('Malabar Gold', 'Primary returned 0 valid prices', true);
-  assert.match(okMail.subject, /Fallback Activated/i);
-  assert.match(okMail.text, /Fallback to 'goldpriceqatar\.com' succeeded/i);
-
-  const failMail = buildFallbackEmailContent('Malabar Gold', 'Both primary and fallback failed', false);
+test('buildFallbackEmailContent formats direct extraction failure alert without aggregator fallback', () => {
+  const failMail = buildFallbackEmailContent('Malabar Gold', 'Primary returned 0 valid prices', false);
   assert.match(failMail.subject, /CRITICAL.*Extraction Failed/i);
-  assert.match(failMail.text, /Both primary and fallback extraction failed/i);
+  assert.match(failMail.text, /Primary extraction failed for 'Malabar Gold'/i);
+  assert.doesNotMatch(failMail.text, /goldpriceqatar\.com/i);
+});
+
+test('fetchMalabarDirectApi recovers from GeoIP redirect (/ae/ -> /us/) when running on US/GitHub Actions IPs', async () => {
+  const { fetchMalabarDirectApi } = require('../strategies/puppeteer');
+  const calls = [];
+
+  const mockFetch = async (url, options) => {
+    calls.push({ url, options });
+    if (url.includes('/ae/malabarprice/')) {
+      // Simulate Magento GeoIP 302 redirect from /ae/... to /us/ homepage returning HTML
+      return {
+        ok: true,
+        status: 200,
+        url: 'https://www.malabargoldanddiamonds.com/us/',
+        headers: { get: () => 'text/html; charset=UTF-8' },
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON at position 0');
+        },
+      };
+    }
+    if (url.includes('/us/malabarprice/')) {
+      return {
+        ok: true,
+        status: 200,
+        url,
+        headers: { get: () => 'application/json' },
+        json: async () => ({
+          '22kt': '465.50 QAR',
+          '24kt': '505.00 QAR',
+          updated_time: '16/10/2026 05:58 PM',
+        }),
+      };
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  const result = await fetchMalabarDirectApi(mockFetch);
+  assert.deepEqual(result, { '22k': '465.50', '24k': '505.00' });
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].url, /\/ae\/malabarprice\/index\/getrates\/\?country=QA&state=Doha/);
+  assert.match(calls[1].url, /\/us\/malabarprice\/index\/getrates\/\?country=QA&state=Doha/);
+  assert.equal(calls[1].options.headers.Referer, 'https://www.malabargoldanddiamonds.com/us/goldprice');
+});
+
+test('resolveMalabarGoldPriceUrl detects GeoIP homepage redirect and resolves regional /goldprice URL', () => {
+  const { resolveMalabarGoldPriceUrl } = require('../strategies/puppeteer');
+
+  // Redirected from /ae/goldprice to /us/ homepage on US IP
+  assert.equal(
+    resolveMalabarGoldPriceUrl(
+      'https://www.malabargoldanddiamonds.com/ae/goldprice',
+      'https://www.malabargoldanddiamonds.com/us/'
+    ),
+    'https://www.malabargoldanddiamonds.com/us/goldprice'
+  );
+
+  // Redirected without trailing slash
+  assert.equal(
+    resolveMalabarGoldPriceUrl(
+      'https://www.malabargoldanddiamonds.com/ae/goldprice',
+      'https://www.malabargoldanddiamonds.com/uk'
+    ),
+    'https://www.malabargoldanddiamonds.com/uk/goldprice'
+  );
+
+  // Not redirected (already on /goldprice)
+  assert.equal(
+    resolveMalabarGoldPriceUrl(
+      'https://www.malabargoldanddiamonds.com/ae/goldprice',
+      'https://www.malabargoldanddiamonds.com/ae/goldprice'
+    ),
+    null
+  );
 });
 
 test('extractPricesFromHtml extracts 1-gram QAR rates from GoodReturns multi-table HTML and ignores deltas/INR tables', () => {
@@ -118,3 +188,4 @@ test('extractPricesFromHtml extracts 1-gram QAR rates from GoodReturns multi-tab
     '18k': '378.00',
   });
 });
+

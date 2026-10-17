@@ -2,57 +2,106 @@ const puppeteer = require('puppeteer');
 const { MIN_VALID_PRICE, MAX_VALID_PRICE, isValidGoldPrice, normalizePriceMap } = require('../utils/validation');
 
 /**
- * Direct API extraction for Malabar Gold rates (Tier 1 Fast-Path).
- * Queries the official JSON pricing endpoint used by their regional web widget.
- * @returns {Promise<{ '22k': string, '24k': string } | null>}
+ * Resolves the regional `/goldprice` URL when Malabar Gold's Magento GeoIP router
+ * redirects `/ae/goldprice` to a regional store homepage (e.g., `/us/` or `/uk/`).
+ *
+ * @param {string} requestedUrl - Original URL requested
+ * @param {string} landedUrl - Final URL after redirects (`page.url()`)
+ * @returns {string | null} Regional `/goldprice` URL if redirected away from `/goldprice`, or `null`
  */
-async function fetchMalabarDirectApi() {
-  const endpoint = 'https://www.malabargoldanddiamonds.com/ae/malabarprice/index/getrates/?country=QA&state=Doha';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Referer': 'https://www.malabargoldanddiamonds.com/ae/goldprice'
-      },
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data || !data['22kt'] || !data['24kt']) {
-      return null;
-    }
-
-    const parseRate = (val) => {
-      if (!val) return null;
-      const clean = String(val).replace(/,/g, '').replace(/[^\d.]/g, '');
-      const parsed = parseFloat(clean);
-      return isValidGoldPrice(parsed) ? parsed.toFixed(2) : null;
-    };
-
-    const k22 = parseRate(data['22kt']);
-    const k24 = parseRate(data['24kt']);
-
-    if (k22 && k24) {
-      return { '22k': k22, '24k': k24 };
-    }
-
-    return null;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    console.warn(`   [Warn] Malabar direct API request failed: ${err.message}`);
+function resolveMalabarGoldPriceUrl(requestedUrl, landedUrl) {
+  if (!landedUrl || landedUrl.includes('/goldprice')) {
     return null;
   }
+  try {
+    const parsed = new URL(landedUrl);
+    if (!parsed.hostname.includes('malabargoldanddiamonds.com')) {
+      return null;
+    }
+    const basePath = parsed.pathname.endsWith('/') ? parsed.pathname : `${parsed.pathname}/`;
+    return `${parsed.origin}${basePath}goldprice`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Direct API extraction for Malabar Gold rates (Tier 1 Fast-Path).
+ * Queries the official JSON pricing endpoint used by their regional web widget.
+ * Iterates across regional store views ('ae', 'us', 'uk') so GeoIP redirects on
+ * cloud/GitHub Actions runners (e.g. US IPs redirected from /ae/ to /us/) are
+ * seamlessly handled.
+ *
+ * @param {typeof fetch} [fetchImpl=fetch] - Fetch implementation (injectable for unit testing)
+ * @returns {Promise<{ '22k': string, '24k': string } | null>}
+ */
+async function fetchMalabarDirectApi(fetchImpl = fetch) {
+  const parseRate = (val) => {
+    if (!val) return null;
+    const clean = String(val).replace(/,/g, '').replace(/[^\d.]/g, '');
+    const parsed = parseFloat(clean);
+    return isValidGoldPrice(parsed) ? parsed.toFixed(2) : null;
+  };
+
+  const stores = ['ae', 'us', 'uk'];
+  const visited = new Set();
+
+  for (let i = 0; i < stores.length; i++) {
+    const store = stores[i];
+    if (visited.has(store)) continue;
+    visited.add(store);
+
+    const endpoint = `https://www.malabargoldanddiamonds.com/${store}/malabarprice/index/getrates/?country=QA&state=Doha`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': `https://www.malabargoldanddiamonds.com/${store}/goldprice`
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      // If Magento GeoIP redirected /ae/malabarprice/... to a store homepage like /us/,
+      // prioritize that redirected store code on the very next iteration.
+      if (response.url && !response.url.includes('malabarprice')) {
+        const match = response.url.match(/malabargoldanddiamonds\.com\/([a-z]{2})(?:\/|$)/i);
+        if (match && match[1]) {
+          const redirectedStore = match[1].toLowerCase();
+          if (!visited.has(redirectedStore)) {
+            stores.splice(i + 1, 0, redirectedStore);
+          }
+        }
+      }
+
+      const data = await response.json();
+      if (!data || !data['22kt'] || !data['24kt']) {
+        continue;
+      }
+
+      const k22 = parseRate(data['22kt']);
+      const k24 = parseRate(data['24kt']);
+
+      if (k22 && k24) {
+        return { '22k': k22, '24k': k24 };
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn(`   [Warn] Malabar direct API attempt (/${store}/) failed: ${err.message}`);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -145,6 +194,12 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     if (provider.name.includes('Malabar')) {
         try {
             console.log('   [Malabar] Executing interactive browser automation fallback...');
+
+            const redirectedGoldPriceUrl = resolveMalabarGoldPriceUrl(provider.url, page.url());
+            if (redirectedGoldPriceUrl) {
+                console.log(`   [Malabar] GeoIP redirect detected (${page.url()}). Navigating to regional goldprice page: ${redirectedGoldPriceUrl}...`);
+                await page.goto(redirectedGoldPriceUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            }
             
             // Dismiss any initial blocking elements / modals
             await page.evaluate(() => {
@@ -340,4 +395,9 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
   }
 }
 
-module.exports = { scrapeWithPuppeteer, fetchMalabarDirectApi, launchScraperBrowser };
+module.exports = {
+  scrapeWithPuppeteer,
+  fetchMalabarDirectApi,
+  resolveMalabarGoldPriceUrl,
+  launchScraperBrowser,
+};
