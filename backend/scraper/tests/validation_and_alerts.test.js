@@ -189,3 +189,36 @@ test('extractPricesFromHtml extracts 1-gram QAR rates from GoodReturns multi-tab
   });
 });
 
+test('fetchAlFardanDirectApi extracts 24K 1g Fortuna bar and 22K per-gram Sovereign coin rate from /api/gold-rates JSON', async () => {
+  const { fetchAlFardanDirectApi } = require('../strategies/puppeteer');
+
+  const mockFetchJson = async (url) => {
+    assert.equal(url, 'https://alfardanexchange.com.qa/api/gold-rates');
+    return {
+      data: [
+        {
+          product_code: '1.G-401',
+          display_label: '1 Gm',
+          rate: 568,
+          price: 568,
+          product_description: ' PAMP-MINTED 1 GRAM GOLD FORTUNA BAR- 24 KARAT',
+        },
+        {
+          product_code: '7.99G22UK-505',
+          display_label: '7.98 Gm',
+          rate: 3930,
+          price: 3930,
+          product_description: 'TRM-COIN 7.98 GRAM GOLD THE SOVEREIGN COIN - 22 KARAT',
+        },
+      ],
+    };
+  };
+
+  const result = await fetchAlFardanDirectApi(mockFetchJson);
+  assert.deepEqual(result, {
+    '24k': '568.00',
+    '22k': (3930 / 7.98).toFixed(2),
+  });
+});
+
+

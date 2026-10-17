@@ -14,9 +14,13 @@ The scraper uses a tiered orchestration logic to balance accuracy and speed:
 
 ## 🛡️ Robustness: Multi-Tier Direct Extraction
 
-For critical direct vendors (such as Malabar Gold), we implement a GeoIP-resilient 2-tier direct extraction architecture without substituting third-party aggregator data:
--   **Tier 1 (GeoIP-Aware Fast-Path Direct Pricing API):** For Malabar Gold, sub-second extraction queries the official regional pricing endpoint (`POST /<store>/malabarprice/index/getrates/?country=QA&state=Doha`) across store views (`ae`, `us`, `uk`) so GeoIP redirects on cloud runners (such as GitHub Actions US IPs) are seamlessly resolved in `< 400ms` with zero browser overhead.
--   **Tier 2 (Interactive UI Automation):** If the direct API fails or is not applicable, Puppeteer navigates to the provider storefront, detects any GeoIP store homepage redirect (`resolveMalabarGoldPriceUrl`), dismisses overlays, selects regional settings ("Qatar" / "Doha"), and parses live DOM values.
+For critical direct vendors (Malabar Gold and Al Fardan Exchange), we implement a 2-tier direct extraction architecture without substituting third-party aggregator data:
+-   **Tier 1 (Fast-Path Direct Pricing API):**
+    -   **Malabar Gold:** Sub-second extraction queries the official regional pricing endpoint (`POST /<store>/malabarprice/index/getrates/?country=QA&state=Doha`) across store views (`ae`, `us`, `uk`) so GeoIP redirects on cloud runners (such as GitHub Actions US IPs) are seamlessly resolved in `< 400ms` with zero browser overhead.
+    -   **Al Fardan Exchange:** Queries the official JSON endpoint (`GET /api/gold-rates`) directly, extracting the 1g 24K PAMP Fortuna Bar (`1.G-401`) and 7.98g 22K Sovereign Coin (`7.99G22UK-505` divided by `7.98`) in `< 400ms`.
+-   **Tier 2 (Interactive UI Automation):** If the direct API fails or is not applicable, Puppeteer navigates to the provider storefront:
+    -   For **Malabar Gold**, detects any GeoIP store homepage redirect (`resolveMalabarGoldPriceUrl`), dismisses overlays, selects regional settings ("Qatar" / "Doha"), and parses live DOM values.
+    -   For **Al Fardan Exchange**, pre-initializes `window.forex_refresh` and `window.refresh` via `evaluateOnNewDocument` to prevent the storefront's `setInterval(..., NaN)` bug from flooding XHR requests and freezing Chromium, then extracts the rendered table rows.
 -   **Failure Notifications:** Every primary extraction failure or incomplete rate set (missing `24K` or `22K`) triggers an immediate email notification to the administrator via `sendFallbackAlert`, and no partial/fallback rates are persisted for that provider.
 
 ---
@@ -45,7 +49,7 @@ For tabular data, the scraper maps header indices to data row indices dynamicall
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Malabar Gold** | `direct` | Puppeteer | Active | Regional Gold Price (`/ae/goldprice`) | Tier 1: GeoIP-aware JSON API (`/ae/`, `/us/`, `/uk/`). Tier 2: Interactive UI. |
 | **Joyalukkas** | `direct` | Puppeteer | Active | Regional Page | Direct browser hydration extraction. |
-| **Al Fardan Exchange** | `direct` | Puppeteer | Active | Store / Rates Page | Direct product extraction (`24K` & `22K`). |
+| **Al Fardan Exchange** | `direct` | Puppeteer | Active | Bullion Rates (`/gold-rates`) | Tier 1: Direct JSON API (`/api/gold-rates`). Tier 2: Browser extraction (`24K` & `22K`). |
 | **GoodReturns Aggregator** | `aggregator` | Cheerio | Active | Market Feed (`goodreturns.in`) | Fast tabular market feed (`24K`, `22K`, `18K`). |
 | **LivePriceOfGold** | `aggregator` | Cheerio | Active | Market Feed (`livepriceofgold.com`) | Full-spectrum aggregator (`24K`, `22K`, `21K`, `18K`). |
 | **Shine Jewelers** | `direct` | Puppeteer | Inactive | Storefront | Soft-deactivated (`is_active: false`) to preserve historical data. |

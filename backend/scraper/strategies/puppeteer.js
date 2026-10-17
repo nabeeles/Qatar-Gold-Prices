@@ -1,3 +1,5 @@
+const https = require('https');
+const axios = require('axios');
 const puppeteer = require('puppeteer');
 const { MIN_VALID_PRICE, MAX_VALID_PRICE, isValidGoldPrice, normalizePriceMap } = require('../utils/validation');
 
@@ -105,6 +107,72 @@ async function fetchMalabarDirectApi(fetchImpl = fetch) {
 }
 
 /**
+ * Direct API extraction for Al Fardan Exchange gold rates (Tier 1 Fast-Path).
+ * Queries Al Fardan's official `/api/gold-rates` JSON endpoint and extracts the
+ * 1 Gram 24K PAMP Fortuna Bar rate and 7.98 Gram 22K Sovereign Coin per-gram rate.
+ * Uses a scoped HTTPS agent because alfardanexchange.com.qa omits the intermediate
+ * CA certificate in its TLS handshake.
+ *
+ * @param {(url: string) => Promise<any>} [fetchJsonImpl] - Optional JSON fetcher for unit testing
+ * @returns {Promise<{ '24k': string, '22k': string } | null>}
+ */
+async function fetchAlFardanDirectApi(fetchJsonImpl) {
+  const endpoint = 'https://alfardanexchange.com.qa/api/gold-rates';
+  const defaultFetchJson = async (url) => {
+    const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+    const response = await axios.get(url, {
+      timeout: 15000,
+      httpsAgent,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+        Referer: 'https://alfardanexchange.com.qa/gold-rates',
+      },
+    });
+    return response.data;
+  };
+
+  try {
+    const payload = await (fetchJsonImpl || defaultFetchJson)(endpoint);
+    const items = Array.isArray(payload?.data) ? payload.data : [];
+    if (items.length === 0) return null;
+
+    const res = {};
+    for (const item of items) {
+      const code = String(item.product_code || '').trim();
+      const desc = String(item.product_description || '').replace(/\s+/g, ' ').trim();
+      const rawPrice = item.price !== null && item.price !== undefined ? item.price : item.rate;
+      const numericPrice = parseFloat(String(rawPrice).replace(/,/g, ''));
+      if (!Number.isFinite(numericPrice)) continue;
+
+      if (
+        !res['24k'] &&
+        (code === '1.G-401' || /1\s+GRAM\s+GOLD\s+FORTUNA\s+BAR\s*-\s*24\s*KARAT/i.test(desc))
+      ) {
+        if (isValidGoldPrice(numericPrice)) {
+          res['24k'] = numericPrice.toFixed(2);
+        }
+      }
+
+      if (
+        !res['22k'] &&
+        (code === '7.99G22UK-505' || /7\.98\s+GRAM\s+GOLD.*SOVEREIGN\s+COIN\s*-\s*22\s*KARAT/i.test(desc))
+      ) {
+        const perGram = numericPrice / 7.98;
+        if (isValidGoldPrice(perGram)) {
+          res['22k'] = perGram.toFixed(2);
+        }
+      }
+    }
+
+    return res['24k'] && res['22k'] ? res : null;
+  } catch (err) {
+    console.warn(`   [Warn] Al Fardan direct API attempt failed: ${err.message}`);
+    return null;
+  }
+}
+
+/**
  * Launches a shared or standalone Puppeteer browser instance.
  * Only disables Chromium sandboxing when running in CI or explicitly requested.
  */
@@ -164,6 +232,22 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     }
   }
 
+  // --- STRATEGY: Al Fardan Exchange (Tier 1 Fast-Path Direct Pricing API) ---
+  if (provider.name.includes('Al Fardan') && !provider.forceBrowserFallback) {
+    try {
+      console.log('   [Al Fardan] Attempting sub-second direct API extraction...');
+      const fastAlFardan = await fetchAlFardanDirectApi();
+      const validatedAlFardan = normalizePriceMap(fastAlFardan);
+      if (validatedAlFardan['24k'] && validatedAlFardan['22k']) {
+        console.log('   ✅ [Al Fardan] Extracted directly via official pricing API:', validatedAlFardan);
+        return validatedAlFardan;
+      }
+      console.log('   [Al Fardan] Direct API unfulfilled, proceeding with browser automation fallback...');
+    } catch (apiErr) {
+      console.warn(`   [Warn] Al Fardan direct API failed: ${apiErr.message}`);
+    }
+  }
+
   const ownsBrowser = !sharedBrowser;
   const browser = sharedBrowser || (await launchScraperBrowser());
   let page = null;
@@ -173,10 +257,19 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36');
     await page.setViewport({ width: 1280, height: 1200 });
 
+    if (provider.name.includes('Al Fardan')) {
+      // Prevent alfardan.js from calling setInterval(..., NaN) when window.refresh is undefined on /gold-rates
+      await page.evaluateOnNewDocument(() => {
+        window.forex_refresh = 3600;
+        window.refresh = 3600;
+      });
+    }
+
     console.log(`   Navigating to secure endpoint: ${provider.url}...`);
     
     try {
-        const response = await page.goto(provider.url, { waitUntil: 'networkidle2', timeout: 45000 });
+        const waitMode = provider.name.includes('Al Fardan') ? 'domcontentloaded' : 'networkidle2';
+        const response = await page.goto(provider.url, { waitUntil: waitMode, timeout: 45000 });
         if (response && response.status() >= 400) {
             console.warn(`   [Warn] Navigation to ${provider.name} returned status ${response.status()}`);
         }
@@ -290,7 +383,7 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
         }
     }
 
-    // --- STRATEGY: Al Fardan Exchange (Direct Product Extraction) ---
+    // --- STRATEGY: Al Fardan Exchange (Tier 2 Browser Product Extraction Fallback) ---
     // Al Fardan Exchange lists individual gold products (minted bars and coins) rather than a simple price chart.
     // We target the 1 Gram 24 Karat bar price as the base price for 24k gold, and calculate the 22k price per gram
     // by dividing the total price of the 7.98 Gram Sovereign 22 Karat Gold Coin by its weight.
@@ -300,7 +393,7 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
             await page.waitForFunction(() => {
                 const text = document.body ? document.body.innerText : '';
                 return text.includes('1 GRAM GOLD') || text.includes('SOVEREIGN COIN') || text.includes('FORTUNA BAR');
-            }, { timeout: 30000 });
+            }, { timeout: 20000 });
         } catch (waitErr) {
             console.warn('   [Warn] Al Fardan product table wait timed out, attempting extraction anyway...');
         }
@@ -308,14 +401,14 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
             const res = {};
             const text = document.body.innerText.replace(/\s+/g, ' ');
             
-            // Extract the 24 Karat 1 Gram bar price (e.g., "1 GRAM GOLD FORTUNA BAR- 24 KARAT 607")
-            const k24Match = text.match(/1\s+GRAM\s+GOLD\s+FORTUNA\s+BAR-\s+24\s+KARAT\s+(\d+)/i);
+            // Extract the 24 Karat 1 Gram bar price (e.g., "1 GRAM GOLD FORTUNA BAR- 24 KARAT 568")
+            const k24Match = text.match(/1\s+GRAM\s+GOLD\s+FORTUNA\s+BAR\s*-\s*24\s+KARAT\s+(\d+(?:\.\d+)?)/i);
             if (k24Match) {
-                res['24k'] = k24Match[1];
+                res['24k'] = parseFloat(k24Match[1]).toFixed(2);
             }
             
-            // Extract the 22 Karat Sovereign Coin price and calculate price per gram (e.g., "7.98 GRAM GOLD THE SOVEREIGN COIN - 22 KARAT 4175")
-            const k22Match = text.match(/7\.98\s+GRAM\s+GOLD\s+THE\s+SOVEREIGN\s+COIN\s+-\s+22\s+KARAT\s+(\d+)/i);
+            // Extract the 22 Karat Sovereign Coin price and calculate price per gram (e.g., "7.98 GRAM GOLD THE SOVEREIGN COIN - 22 KARAT 3930")
+            const k22Match = text.match(/7\.98\s+GRAM\s+GOLD\s+THE\s+SOVEREIGN\s+COIN\s*-\s*22\s+KARAT\s+(\d+(?:\.\d+)?)/i);
             if (k22Match) {
                 const totalPrice = parseFloat(k22Match[1]);
                 const pricePerGram = totalPrice / 7.98;
@@ -398,6 +491,8 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
 module.exports = {
   scrapeWithPuppeteer,
   fetchMalabarDirectApi,
+  fetchAlFardanDirectApi,
   resolveMalabarGoldPriceUrl,
   launchScraperBrowser,
 };
+
