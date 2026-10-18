@@ -186,32 +186,31 @@ function parseAlFardanApiPayload(rawPayload) {
  * @returns {Promise<{ '24k': string, '22k': string }>}
  */
 async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId) {
-  const { stdout } = await execFileAsync(
-    'curl',
-    [
-      '--silent',
-      '--show-error',
-      '--fail',
-      '--location',
-      '--insecure',
-      '--connect-timeout',
-      '6',
-      '--max-time',
-      '12',
-      '--socks5-hostname',
-      socksProxy,
-      '--proxy-user',
-      `qgp-${circuitId}:pass`,
-      '-H',
-      'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-      '-H',
-      'Accept: application/json',
-      '-H',
-      'Referer: https://alfardanexchange.com.qa/gold-rates',
-      url,
-    ],
-    { maxBuffer: 5 * 1024 * 1024 }
-  );
+  const curlArgs = [
+    '--silent',
+    '--show-error',
+    '--fail',
+    '--location',
+    '--insecure',
+    '--connect-timeout',
+    '10',
+    '--max-time',
+    '16',
+    '--socks5-hostname',
+    socksProxy,
+    '--proxy-user',
+    `qgp-${circuitId}:pass`,
+    '-H',
+    'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    '-H',
+    'Accept: application/json',
+  ];
+  if (url.includes('alfardanexchange.com.qa')) {
+    curlArgs.push('-H', 'Referer: https://alfardanexchange.com.qa/gold-rates');
+  }
+  curlArgs.push(url);
+
+  const { stdout } = await execFileAsync('curl', curlArgs, { maxBuffer: 5 * 1024 * 1024 });
   const parsed = parseAlFardanApiPayload(stdout);
   if (!parsed) {
     throw new Error('Incomplete or unparseable Al Fardan payload');
@@ -238,17 +237,20 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
   const directTimeoutMs = socksProxy ? 2500 : 7000;
   const defaultFetchJson = async (url, timeoutMs = directTimeoutMs) => {
     const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+    const headers = {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      Accept: 'application/json',
+    };
+    if (url.includes('alfardanexchange.com.qa')) {
+      headers.Origin = 'https://alfardanexchange.com.qa';
+      headers.Referer = 'https://alfardanexchange.com.qa/gold-rates';
+    }
     const response = await axios.get(url, {
       timeout: timeoutMs,
       signal: AbortSignal.timeout(timeoutMs),
       httpsAgent,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-        Accept: 'application/json',
-        Origin: 'https://alfardanexchange.com.qa',
-        Referer: 'https://alfardanexchange.com.qa/gold-rates',
-      },
+      headers,
     });
     return response.data;
   };
@@ -274,15 +276,19 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
     return null;
   }
 
+  const relayMasterUrl = `https://api.cors.lol/?url=${encodeURIComponent(ALFARDAN_MASTER_API_URL)}`;
+
   // 2. Parallel stream-isolated SOCKS5 / Tor regional egress waves (bypasses US GeoIP firewall in CI)
   if (socksProxy) {
     const slotEndpoints = [
+      relayMasterUrl,
+      relayMasterUrl,
+      relayMasterUrl,
+      relayMasterUrl,
       ALFARDAN_WEB_API_URL,
       ALFARDAN_WEB_API_URL,
       ALFARDAN_WEB_API_URL,
       ALFARDAN_WEB_API_URL,
-      ALFARDAN_MASTER_API_URL,
-      ALFARDAN_MASTER_API_URL,
     ];
     for (let wave = 1; wave <= 3; wave++) {
       try {
@@ -330,7 +336,7 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
  * Only disables Chromium sandboxing when running in CI or explicitly requested.
  */
 async function launchScraperBrowser() {
-  const args = ['--disable-dev-shm-usage', '--disable-gpu'];
+  const args = ['--disable-dev-shm-usage', '--disable-gpu', '--ignore-certificate-errors'];
   if (process.env.CI === 'true' || process.env.PUPPETEER_NO_SANDBOX === 'true') {
     args.push('--no-sandbox', '--disable-setuid-sandbox');
   }
