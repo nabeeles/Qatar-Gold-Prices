@@ -32,8 +32,28 @@ jobs:
           cd backend
           npm ci
 
+      - name: Setup Regional Egress Proxy
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq tor
+          sudo tee -a /etc/tor/torrc > /dev/null << 'EOF'
+          ExitNodes {de},{gb},{nl},{fr},{ch},{se},{it},{at},{fi},{no},{pl},{cz},{ro},{in},{id},{sg},{ae},{qa}
+          StrictNodes 1
+          GeoIPExcludeUnknown 1
+          EOF
+          sudo systemctl restart tor
+          for i in $(seq 1 30); do
+            if sudo journalctl -u tor --no-pager | grep -q "Bootstrapped 100%"; then
+              echo "Tor regional egress ready"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Run Health Check
         env:
+          CI: 'true'
+          ALFARDAN_SOCKS_PROXY: '127.0.0.1:9050'
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}

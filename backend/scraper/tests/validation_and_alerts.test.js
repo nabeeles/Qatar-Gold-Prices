@@ -221,4 +221,67 @@ test('fetchAlFardanDirectApi extracts 24K 1g Fortuna bar and 22K per-gram Sovere
   });
 });
 
+test('fetchAlFardanDirectApi fails over to upstream alfaremit.com:7095 master API and parses returnObject.data schema', async () => {
+  const { fetchAlFardanDirectApi, parseAlFardanApiPayload } = require('../strategies/puppeteer');
+  const calls = [];
+
+  const mockFetchJson = async (url) => {
+    calls.push(url);
+    if (url.includes('alfardanexchange.com.qa')) {
+      throw new Error('connect ETIMEDOUT 89.211.60.244:443');
+    }
+    if (url.includes('alfaremit.com:7095')) {
+      return {
+        returnCode: 200,
+        returnMsg: 'Data retrieved successfully.',
+        returnObject: {
+          data: [
+            {
+              productCode: '1.G-401',
+              productdescription: ' PAMP-MINTED 1 GRAM GOLD FORTUNA BAR- 24 KARAT',
+              price: 568,
+              rate: 568,
+              grossWeight: 1,
+            },
+            {
+              productCode: '7.99G22UK-505',
+              productdescription: 'TRM-COIN 7.98 GRAM GOLD THE SOVEREIGN COIN - 22 KARAT',
+              price: 3930,
+              rate: 3930,
+              grossWeight: 7.98,
+            },
+          ],
+        },
+      };
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  const result = await fetchAlFardanDirectApi(mockFetchJson);
+  assert.deepEqual(result, {
+    '24k': '568.00',
+    '22k': (3930 / 7.98).toFixed(2),
+  });
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /alfardanexchange\.com\.qa\/api\/gold-rates/);
+  assert.match(calls[1], /alfaremit\.com:7095\/api\/MetalProductApp\/MetalProductAppList/);
+
+  // Also verify raw JSON string parsing support
+  const parsedFromString = parseAlFardanApiPayload(
+    JSON.stringify({
+      returnObject: {
+        data: [
+          { productCode: '1.G-401', price: 568 },
+          { productCode: '7.99G22UK-505', price: 3930 },
+        ],
+      },
+    })
+  );
+  assert.deepEqual(parsedFromString, {
+    '24k': '568.00',
+    '22k': (3930 / 7.98).toFixed(2),
+  });
+});
+
+
 

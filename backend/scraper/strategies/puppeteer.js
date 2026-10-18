@@ -106,70 +106,202 @@ async function fetchMalabarDirectApi(fetchImpl = fetch) {
   return null;
 }
 
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
+
+const ALFARDAN_WEB_API_URL = 'https://alfardanexchange.com.qa/api/gold-rates';
+const ALFARDAN_MASTER_API_URL =
+  'https://alfaremit.com:7095/api/MetalProductApp/MetalProductAppList?productType=ALL&pagination.PageSize=1000&pagination.PageNumber=1&pagination.SortBy=Id&pagination.SortDirection=asc';
+
+/**
+ * Parses Al Fardan Exchange gold rate payloads from either:
+ * 1. `alfardanexchange.com.qa/api/gold-rates` (`{ data: [{ product_code, product_description, price, rate }] }`)
+ * 2. `alfaremit.com:7095/api/MetalProductApp/MetalProductAppList` (`{ returnObject: { data: [{ productCode, productdescription, price, rate }] } }`)
+ *
+ * Extracts the 1 Gram 24K PAMP Fortuna Bar rate and 7.98 Gram 22K Sovereign Coin per-gram rate.
+ *
+ * @param {any} rawPayload - Parsed JSON object or raw JSON string
+ * @returns {{ '24k': string, '22k': string } | null}
+ */
+function parseAlFardanApiPayload(rawPayload) {
+  let payload = rawPayload;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+  if (!payload || typeof payload !== 'object') return null;
+
+  const items = Array.isArray(payload.data)
+    ? payload.data
+    : Array.isArray(payload.returnObject?.data)
+      ? payload.returnObject.data
+      : [];
+  if (items.length === 0) return null;
+
+  const res = {};
+  for (const item of items) {
+    const code = String(item.product_code || item.productCode || '').trim();
+    const desc = String(item.product_description || item.productdescription || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const rawPrice = item.price !== null && item.price !== undefined ? item.price : item.rate;
+    const numericPrice = parseFloat(String(rawPrice).replace(/,/g, ''));
+    if (!Number.isFinite(numericPrice)) continue;
+
+    if (
+      !res['24k'] &&
+      (code === '1.G-401' || /1\s+GRAM\s+GOLD\s+FORTUNA\s+BAR\s*-\s*24\s*KARAT/i.test(desc))
+    ) {
+      if (isValidGoldPrice(numericPrice)) {
+        res['24k'] = numericPrice.toFixed(2);
+      }
+    }
+
+    if (
+      !res['22k'] &&
+      (code === '7.99G22UK-505' || /7\.98\s+GRAM\s+GOLD.*SOVEREIGN\s+COIN\s*-\s*22\s*KARAT/i.test(desc))
+    ) {
+      const perGram = numericPrice / 7.98;
+      if (isValidGoldPrice(perGram)) {
+        res['22k'] = perGram.toFixed(2);
+      }
+    }
+  }
+
+  return res['24k'] && res['22k'] ? res : null;
+}
+
+/**
+ * Fetches JSON from a URL via a SOCKS5 proxy (such as Tor on GitHub Actions) using curl.
+ * Uses unique SOCKS5 credentials per attempt to trigger Tor's IsolateSocksAuth circuit rotation.
+ *
+ * @param {string} url - Target URL
+ * @param {string} socksProxy - SOCKS5 host:port (e.g. '127.0.0.1:9050')
+ * @param {number} attempt - Attempt number used for stream isolation
+ * @returns {Promise<any>}
+ */
+async function fetchJsonViaSocksProxy(url, socksProxy, attempt = 1) {
+  const { stdout } = await execFileAsync(
+    'curl',
+    [
+      '--silent',
+      '--show-error',
+      '--fail',
+      '--location',
+      '--insecure',
+      '--max-time',
+      '20',
+      '--socks5-hostname',
+      socksProxy,
+      '--proxy-user',
+      `qgp-${Date.now()}-${attempt}:pass`,
+      '-H',
+      'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      '-H',
+      'Accept: application/json',
+      '-H',
+      'Referer: https://alfardanexchange.com.qa/gold-rates',
+      url,
+    ],
+    { maxBuffer: 5 * 1024 * 1024 }
+  );
+  return JSON.parse(stdout);
+}
+
 /**
  * Direct API extraction for Al Fardan Exchange gold rates (Tier 1 Fast-Path).
- * Queries Al Fardan's official `/api/gold-rates` JSON endpoint and extracts the
- * 1 Gram 24K PAMP Fortuna Bar rate and 7.98 Gram 22K Sovereign Coin per-gram rate.
- * Uses a scoped HTTPS agent because alfardanexchange.com.qa omits the intermediate
- * CA certificate in its TLS handshake.
+ * Queries Al Fardan's official `/api/gold-rates` and upstream `alfaremit.com:7095`
+ * JSON endpoints and extracts the 1 Gram 24K PAMP Fortuna Bar rate and 7.98 Gram
+ * 22K Sovereign Coin per-gram rate.
+ *
+ * Because Al Fardan's Qatari firewall drops TCP SYN packets from US datacenter IPs
+ * (including GitHub Actions US runners), this function enforces strict connection
+ * abort timeouts and cascades through configured SOCKS5/Tor regional egress or
+ * edge relay routes when direct TCP connection times out.
  *
  * @param {(url: string) => Promise<any>} [fetchJsonImpl] - Optional JSON fetcher for unit testing
  * @returns {Promise<{ '24k': string, '22k': string } | null>}
  */
 async function fetchAlFardanDirectApi(fetchJsonImpl) {
-  const endpoint = 'https://alfardanexchange.com.qa/api/gold-rates';
-  const defaultFetchJson = async (url) => {
+  const directTimeoutMs = process.env.ALFARDAN_SOCKS_PROXY ? 4500 : 7000;
+  const defaultFetchJson = async (url, timeoutMs = directTimeoutMs) => {
     const httpsAgent = new https.Agent({ rejectUnauthorized: false });
     const response = await axios.get(url, {
-      timeout: 15000,
+      timeout: timeoutMs,
+      signal: AbortSignal.timeout(timeoutMs),
       httpsAgent,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         Accept: 'application/json',
+         Origin: 'https://alfardanexchange.com.qa',
         Referer: 'https://alfardanexchange.com.qa/gold-rates',
       },
     });
     return response.data;
   };
 
-  try {
-    const payload = await (fetchJsonImpl || defaultFetchJson)(endpoint);
-    const items = Array.isArray(payload?.data) ? payload.data : [];
-    if (items.length === 0) return null;
+  const fetcher = fetchJsonImpl || defaultFetchJson;
+  const directEndpoints = [ALFARDAN_WEB_API_URL, ALFARDAN_MASTER_API_URL];
 
-    const res = {};
-    for (const item of items) {
-      const code = String(item.product_code || '').trim();
-      const desc = String(item.product_description || '').replace(/\s+/g, ' ').trim();
-      const rawPrice = item.price !== null && item.price !== undefined ? item.price : item.rate;
-      const numericPrice = parseFloat(String(rawPrice).replace(/,/g, ''));
-      if (!Number.isFinite(numericPrice)) continue;
-
-      if (
-        !res['24k'] &&
-        (code === '1.G-401' || /1\s+GRAM\s+GOLD\s+FORTUNA\s+BAR\s*-\s*24\s*KARAT/i.test(desc))
-      ) {
-        if (isValidGoldPrice(numericPrice)) {
-          res['24k'] = numericPrice.toFixed(2);
-        }
+  // 1. Direct fast-path (completes in <400ms from Qatar/EU/Asia)
+  for (const endpoint of directEndpoints) {
+    try {
+      const payload = await fetcher(endpoint);
+      const parsed = parseAlFardanApiPayload(payload);
+      if (parsed) {
+        return parsed;
       }
+    } catch (err) {
+      console.warn(`   [Warn] Al Fardan direct API attempt (${endpoint}) failed: ${err.message}`);
+    }
+  }
 
-      if (
-        !res['22k'] &&
-        (code === '7.99G22UK-505' || /7\.98\s+GRAM\s+GOLD.*SOVEREIGN\s+COIN\s*-\s*22\s*KARAT/i.test(desc))
-      ) {
-        const perGram = numericPrice / 7.98;
-        if (isValidGoldPrice(perGram)) {
-          res['22k'] = perGram.toFixed(2);
+  // If a custom unit-test fetcher was supplied, do not invoke external SOCKS/relay fallbacks
+  if (fetchJsonImpl) {
+    return null;
+  }
+
+  // 2. SOCKS5 / Tor regional egress tunnel (bypasses US GeoIP firewall block in GitHub Actions)
+  const socksProxy = process.env.ALFARDAN_SOCKS_PROXY;
+  if (socksProxy) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      for (const endpoint of directEndpoints) {
+        try {
+          console.log(`   [Al Fardan] Attempting SOCKS5 egress (${socksProxy}, attempt ${attempt}) -> ${endpoint}...`);
+          const payload = await fetchJsonViaSocksProxy(endpoint, socksProxy, attempt);
+          const parsed = parseAlFardanApiPayload(payload);
+          if (parsed) {
+            return parsed;
+          }
+        } catch (err) {
+          console.warn(`   [Warn] Al Fardan SOCKS5 attempt ${attempt} (${endpoint}) failed: ${err.message}`);
         }
       }
     }
-
-    return res['24k'] && res['22k'] ? res : null;
-  } catch (err) {
-    console.warn(`   [Warn] Al Fardan direct API attempt failed: ${err.message}`);
-    return null;
   }
+
+  // 3. Zero-daemon edge relay fallback against Al Fardan's official endpoints
+  for (const endpoint of [ALFARDAN_MASTER_API_URL, ALFARDAN_WEB_API_URL]) {
+    const relayUrl = `https://api.cors.lol/?url=${encodeURIComponent(endpoint)}`;
+    try {
+      console.log(`   [Al Fardan] Attempting edge relay -> ${endpoint}...`);
+      const payload = await defaultFetchJson(relayUrl, 12000);
+      const parsed = parseAlFardanApiPayload(payload);
+      if (parsed) {
+        return parsed;
+      }
+    } catch (err) {
+      console.warn(`   [Warn] Al Fardan edge relay attempt (${endpoint}) failed: ${err.message}`);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -492,6 +624,7 @@ module.exports = {
   scrapeWithPuppeteer,
   fetchMalabarDirectApi,
   fetchAlFardanDirectApi,
+  parseAlFardanApiPayload,
   resolveMalabarGoldPriceUrl,
   launchScraperBrowser,
 };
