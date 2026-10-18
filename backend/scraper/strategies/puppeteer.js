@@ -178,14 +178,14 @@ function parseAlFardanApiPayload(rawPayload) {
 
 /**
  * Fetches JSON from a URL via a SOCKS5 proxy (such as Tor on GitHub Actions) using curl.
- * Uses unique SOCKS5 credentials per attempt to trigger Tor's IsolateSocksAuth circuit rotation.
+ * Uses unique SOCKS5 credentials per slot to trigger Tor's IsolateSocksAuth circuit rotation.
  *
  * @param {string} url - Target URL
  * @param {string} socksProxy - SOCKS5 host:port (e.g. '127.0.0.1:9050')
- * @param {number} attempt - Attempt number used for stream isolation
- * @returns {Promise<any>}
+ * @param {string} circuitId - Unique stream isolation identifier
+ * @returns {Promise<{ '24k': string, '22k': string }>}
  */
-async function fetchJsonViaSocksProxy(url, socksProxy, attempt = 1) {
+async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId) {
   const { stdout } = await execFileAsync(
     'curl',
     [
@@ -194,12 +194,14 @@ async function fetchJsonViaSocksProxy(url, socksProxy, attempt = 1) {
       '--fail',
       '--location',
       '--insecure',
+      '--connect-timeout',
+      '6',
       '--max-time',
-      '20',
+      '12',
       '--socks5-hostname',
       socksProxy,
       '--proxy-user',
-      `qgp-${Date.now()}-${attempt}:pass`,
+      `qgp-${circuitId}:pass`,
       '-H',
       'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
       '-H',
@@ -210,7 +212,11 @@ async function fetchJsonViaSocksProxy(url, socksProxy, attempt = 1) {
     ],
     { maxBuffer: 5 * 1024 * 1024 }
   );
-  return JSON.parse(stdout);
+  const parsed = parseAlFardanApiPayload(stdout);
+  if (!parsed) {
+    throw new Error('Incomplete or unparseable Al Fardan payload');
+  }
+  return parsed;
 }
 
 /**
@@ -221,14 +227,15 @@ async function fetchJsonViaSocksProxy(url, socksProxy, attempt = 1) {
  *
  * Because Al Fardan's Qatari firewall drops TCP SYN packets from US datacenter IPs
  * (including GitHub Actions US runners), this function enforces strict connection
- * abort timeouts and cascades through configured SOCKS5/Tor regional egress or
- * edge relay routes when direct TCP connection times out.
+ * abort timeouts and races parallel stream-isolated SOCKS5/Tor regional circuits
+ * (`Promise.any`) when `ALFARDAN_SOCKS_PROXY` is configured.
  *
  * @param {(url: string) => Promise<any>} [fetchJsonImpl] - Optional JSON fetcher for unit testing
  * @returns {Promise<{ '24k': string, '22k': string } | null>}
  */
 async function fetchAlFardanDirectApi(fetchJsonImpl) {
-  const directTimeoutMs = process.env.ALFARDAN_SOCKS_PROXY ? 4500 : 7000;
+  const socksProxy = !fetchJsonImpl ? process.env.ALFARDAN_SOCKS_PROXY : null;
+  const directTimeoutMs = socksProxy ? 2500 : 7000;
   const defaultFetchJson = async (url, timeoutMs = directTimeoutMs) => {
     const httpsAgent = new https.Agent({ rejectUnauthorized: false });
     const response = await axios.get(url, {
@@ -239,7 +246,7 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         Accept: 'application/json',
-         Origin: 'https://alfardanexchange.com.qa',
+        Origin: 'https://alfardanexchange.com.qa',
         Referer: 'https://alfardanexchange.com.qa/gold-rates',
       },
     });
@@ -267,21 +274,35 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
     return null;
   }
 
-  // 2. SOCKS5 / Tor regional egress tunnel (bypasses US GeoIP firewall block in GitHub Actions)
-  const socksProxy = process.env.ALFARDAN_SOCKS_PROXY;
+  // 2. Parallel stream-isolated SOCKS5 / Tor regional egress waves (bypasses US GeoIP firewall in CI)
   if (socksProxy) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      for (const endpoint of directEndpoints) {
-        try {
-          console.log(`   [Al Fardan] Attempting SOCKS5 egress (${socksProxy}, attempt ${attempt}) -> ${endpoint}...`);
-          const payload = await fetchJsonViaSocksProxy(endpoint, socksProxy, attempt);
-          const parsed = parseAlFardanApiPayload(payload);
-          if (parsed) {
-            return parsed;
-          }
-        } catch (err) {
-          console.warn(`   [Warn] Al Fardan SOCKS5 attempt ${attempt} (${endpoint}) failed: ${err.message}`);
+    const slotEndpoints = [
+      ALFARDAN_WEB_API_URL,
+      ALFARDAN_WEB_API_URL,
+      ALFARDAN_WEB_API_URL,
+      ALFARDAN_WEB_API_URL,
+      ALFARDAN_MASTER_API_URL,
+      ALFARDAN_MASTER_API_URL,
+    ];
+    for (let wave = 1; wave <= 3; wave++) {
+      try {
+        console.log(
+          `   [Al Fardan] Racing ${slotEndpoints.length} parallel regional SOCKS5 circuits (wave ${wave}/3 via ${socksProxy})...`
+        );
+        const waveResult = await Promise.any(
+          slotEndpoints.map((endpoint, idx) =>
+            fetchAndParseViaSocksProxy(
+              endpoint,
+              socksProxy,
+              `w${wave}-s${idx + 1}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+            )
+          )
+        );
+        if (waveResult && waveResult['24k'] && waveResult['22k']) {
+          return waveResult;
         }
+      } catch (waveErr) {
+        console.warn(`   [Warn] Al Fardan SOCKS5 wave ${wave} did not yield rates: ${waveErr.message}`);
       }
     }
   }
@@ -291,7 +312,7 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
     const relayUrl = `https://api.cors.lol/?url=${encodeURIComponent(endpoint)}`;
     try {
       console.log(`   [Al Fardan] Attempting edge relay -> ${endpoint}...`);
-      const payload = await defaultFetchJson(relayUrl, 12000);
+      const payload = await defaultFetchJson(relayUrl, 10000);
       const parsed = parseAlFardanApiPayload(payload);
       if (parsed) {
         return parsed;

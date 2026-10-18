@@ -91,7 +91,7 @@ node scraper/health-check.js
 ## 🚀 Deployment & CI/CD
 
 ### GitHub Actions (Scraper Cron & Health Check)
-The automated workflows are located in `.github/workflows/scrape-prices.yml` (hourly at `0 * * * *`) and `.github/workflows/provider-health-check.yml` (daily at `0 8 * * *`).
+The automated workflows are located in `.github/workflows/scrape-prices.yml` (hourly at `0 * * * *`) and `.github/workflows/provider-health-check.yml` (daily at `0 8 * * *`). Both workflows automatically provision a local regional SOCKS5 egress proxy (`ALFARDAN_SOCKS_PROXY=127.0.0.1:9050` with `tor` + `tor-geoipdb`) so US-hosted GitHub Actions runners bypass Al Fardan Exchange's Qatari GeoIP firewall.
 
 Configure the following repository secrets in GitHub:
 - `SUPABASE_URL`

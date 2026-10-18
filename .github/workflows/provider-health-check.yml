@@ -35,16 +35,21 @@ jobs:
       - name: Setup Regional Egress Proxy
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq tor
+          sudo apt-get install -y -qq tor tor-geoipdb
+          sudo systemctl stop tor tor@default 2>/dev/null || true
           sudo tee -a /etc/tor/torrc > /dev/null << 'EOF'
-          ExitNodes {de},{gb},{nl},{fr},{ch},{se},{it},{at},{fi},{no},{pl},{cz},{ro},{in},{id},{sg},{ae},{qa}
+          ExitNodes {se},{ch},{nl},{fi},{no},{gb},{fr},{it},{pl},{cz},{ro},{de},{in},{id},{sg}
           StrictNodes 1
-          GeoIPExcludeUnknown 1
+          MaxCircuitDirtiness 10
+          NewCircuitPeriod 5
+          Log notice file /tmp/tor.log
           EOF
-          sudo systemctl restart tor
+          sudo touch /tmp/tor.log
+          sudo chown debian-tor:debian-tor /tmp/tor.log
+          sudo -u debian-tor tor --RunAsDaemon 1
           for i in $(seq 1 30); do
-            if sudo journalctl -u tor --no-pager | grep -q "Bootstrapped 100%"; then
-              echo "Tor regional egress ready"
+            if grep -q "Bootstrapped 100%" /tmp/tor.log 2>/dev/null; then
+              echo "Tor regional egress ready in ${i}s"
               break
             fi
             sleep 1

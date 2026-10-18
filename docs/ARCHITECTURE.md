@@ -26,7 +26,7 @@ The **Qatar Gold Prices** project is a robust, privacy-first system designed to 
 
 ### 1. The Scraper (Backend)
 - **Engine Dispatch & Browser Pooling:** Dynamically routes tasks to **Puppeteer** (sharing a single browser instance across direct retail sites) or **Cheerio** (for lightweight aggregators) based on database metadata (`scraping_type`).
-- **Multi-Tier Direct Robustness:** For Malabar Gold (GeoIP-aware regional store views `/ae/`, `/us/`, `/uk/`) and Al Fardan Exchange (`GET /api/gold-rates`), the scraper executes a sub-second direct pricing API fast-path and cascades to interactive UI browser automation if needed, without substituting third-party aggregator fallback data.
+- **Multi-Tier Direct Robustness:** For Malabar Gold (GeoIP-aware regional store views `/ae/`, `/us/`, `/uk/`) and Al Fardan Exchange (`GET /api/gold-rates` and upstream `alfaremit.com:7095` with parallel SOCKS5 regional egress for Geo-fenced CI runners), the scraper executes a sub-second direct pricing API fast-path and cascades to interactive UI browser automation if needed, without substituting third-party aggregator fallback data.
 - **Price & Hierarchy Validation:** Every extracted rate is validated against realistic bounds (`100`–`2000` QAR/g) and monotonic purity ordering (`24K >= 22K >= 21K >= 18K`) via `backend/scraper/utils/validation.js` before persistence.
 - **Health Monitoring & Failure Alerts:** Every primary extraction failure triggers an immediate `sendFallbackAlert` email, complemented by a daily automated health check across all active sources.
 
