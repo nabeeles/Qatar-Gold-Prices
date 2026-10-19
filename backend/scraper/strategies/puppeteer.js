@@ -185,7 +185,7 @@ function parseAlFardanApiPayload(rawPayload) {
  * @param {string} circuitId - Unique stream isolation identifier
  * @returns {Promise<{ '24k': string, '22k': string }>}
  */
-async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId) {
+async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId, signal) {
   const curlArgs = [
     '--silent',
     '--show-error',
@@ -193,9 +193,9 @@ async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId) {
     '--location',
     '--insecure',
     '--connect-timeout',
-    '10',
+    '20',
     '--max-time',
-    '16',
+    '28',
     '--socks5-hostname',
     socksProxy,
     '--proxy-user',
@@ -210,7 +210,11 @@ async function fetchAndParseViaSocksProxy(url, socksProxy, circuitId) {
   }
   curlArgs.push(url);
 
-  const { stdout } = await execFileAsync('curl', curlArgs, { maxBuffer: 5 * 1024 * 1024 });
+  const execOptions = { maxBuffer: 5 * 1024 * 1024 };
+  if (signal) {
+    execOptions.signal = signal;
+  }
+  const { stdout } = await execFileAsync('curl', curlArgs, execOptions);
   const parsed = parseAlFardanApiPayload(stdout);
   if (!parsed) {
     throw new Error('Incomplete or unparseable Al Fardan payload');
@@ -276,31 +280,22 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
     return null;
   }
 
-  const relayMasterUrl = `https://api.cors.lol/?url=${encodeURIComponent(ALFARDAN_MASTER_API_URL)}`;
-
   // 2. Parallel stream-isolated SOCKS5 / Tor regional egress waves (bypasses US GeoIP firewall in CI)
   if (socksProxy) {
-    const slotEndpoints = [
-      relayMasterUrl,
-      relayMasterUrl,
-      relayMasterUrl,
-      relayMasterUrl,
-      ALFARDAN_WEB_API_URL,
-      ALFARDAN_WEB_API_URL,
-      ALFARDAN_WEB_API_URL,
-      ALFARDAN_WEB_API_URL,
-    ];
-    for (let wave = 1; wave <= 3; wave++) {
+    const slotEndpoints = Array.from({ length: 12 }, () => ALFARDAN_WEB_API_URL);
+    for (let wave = 1; wave <= 4; wave++) {
+      const waveController = new AbortController();
       try {
         console.log(
-          `   [Al Fardan] Racing ${slotEndpoints.length} parallel regional SOCKS5 circuits (wave ${wave}/3 via ${socksProxy})...`
+          `   [Al Fardan] Racing ${slotEndpoints.length} parallel regional SOCKS5 circuits (wave ${wave}/4 via ${socksProxy})...`
         );
         const waveResult = await Promise.any(
           slotEndpoints.map((endpoint, idx) =>
             fetchAndParseViaSocksProxy(
               endpoint,
               socksProxy,
-              `w${wave}-s${idx + 1}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+              `w${wave}-s${idx + 1}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              waveController.signal
             )
           )
         );
@@ -309,6 +304,8 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
         }
       } catch (waveErr) {
         console.warn(`   [Warn] Al Fardan SOCKS5 wave ${wave} did not yield rates: ${waveErr.message}`);
+      } finally {
+        waveController.abort();
       }
     }
   }
@@ -334,9 +331,11 @@ async function fetchAlFardanDirectApi(fetchJsonImpl) {
 /**
  * Launches a shared or standalone Puppeteer browser instance.
  * Only disables Chromium sandboxing when running in CI or explicitly requested.
+ *
+ * @param {string[]} [extraArgs=[]] - Additional Chromium command-line flags
  */
-async function launchScraperBrowser() {
-  const args = ['--disable-dev-shm-usage', '--disable-gpu', '--ignore-certificate-errors'];
+async function launchScraperBrowser(extraArgs = []) {
+  const args = ['--disable-dev-shm-usage', '--disable-gpu', '--ignore-certificate-errors', ...extraArgs];
   if (process.env.CI === 'true' || process.env.PUPPETEER_NO_SANDBOX === 'true') {
     args.push('--no-sandbox', '--disable-setuid-sandbox');
   }
@@ -407,8 +406,13 @@ async function scrapeWithPuppeteer(provider, sharedBrowser = null) {
     }
   }
 
-  const ownsBrowser = !sharedBrowser;
-  const browser = sharedBrowser || (await launchScraperBrowser());
+  const useAlFardanProxyBrowser = Boolean(
+    provider.name.includes('Al Fardan') && process.env.ALFARDAN_SOCKS_PROXY
+  );
+  const ownsBrowser = !sharedBrowser || useAlFardanProxyBrowser;
+  const browser = useAlFardanProxyBrowser
+    ? await launchScraperBrowser([`--proxy-server=socks5://${process.env.ALFARDAN_SOCKS_PROXY}`])
+    : sharedBrowser || (await launchScraperBrowser());
   let page = null;
 
   try {

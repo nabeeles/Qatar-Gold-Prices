@@ -43,6 +43,7 @@ jobs:
           sudo chown debian-tor:adm /var/log/tor/notices.log
           sudo tee -a /etc/tor/torrc > /dev/null << 'EOF'
           Log notice file /var/log/tor/notices.log
+          ExcludeExitNodes {us}
           EOF
           sudo -u debian-tor -H tor --RunAsDaemon 1
           for i in $(seq 1 30); do
